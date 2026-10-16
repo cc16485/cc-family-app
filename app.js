@@ -61,9 +61,18 @@
         .then(function (res) { return res.json().catch(function () { return {} }).then(function (d) { return { status: res.status, data: d } }) })
     }).catch(function () { return { status: 0, data: { error: "We can't reach Caring Companions right now. Check your connection and try again." } } })
   }
+  /* the visits booked in the app from today on, soonest first */
+  function mineAhead() {
+    var today = central().date
+    return (S.bookings || []).filter(function (b) { return b.status !== 'cancelled' && b.date >= today })
+      .sort(function (a, b) { return (a.date + (a.start || a.window_start || '')).localeCompare(b.date + (b.start || b.window_start || '')) })
+  }
+  function whenOf(b) { return b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours)) }
+  function statusWords(b) { return b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)' : 'Finding a caregiver' }
   function load(view) {
     S.err = ''; S.busy = true; render()
-    return call('home').then(function (r) {
+    return Promise.all([call('home'), call('bookings')]).then(function (both) {
+      var r = both[0]; S.bookings = both[1].status === 200 ? both[1].data.bookings : (S.bookings || [])
       S.busy = false
       if (r.status === 401) { S.view = 'signin'; return render() }
       if (r.status !== 200) { S.err = r.data.error || 'Something went wrong.'; return render() }
@@ -109,25 +118,25 @@
       S.me.clients.map(function (c) { return '<button class="row" data-pick="' + esc(c.id) + '"><span class="grow"><span class="t">' + esc(c.name) + '</span></span>' + ICON.chev + '</button>' }).join('') + '</div></div>'
   }
   V.home = function () {
-    var h = S.home, nx = h.visits[0], name = h.client.name
+    var h = S.home, nx = mineAhead()[0], name = h.client.name
     var waiting = h.waiting.filter(function (w) { return w.status !== 'practice' })
     return top('Visits for ' + name, { tall: true, help: true, sub: 'Hello, ' + first(S.me && S.me.name) }) +
-      (nx ? '<button class="card next" data-go="visits">' + avatar(nx.caregiver ? { first_name: nx.caregiver.first_name, photo: cgPhoto(nx.caregiver.axiscare_id) } : null) +
-            '<span style="display:flex;flex-direction:column;gap:2px;flex:1"><span class="label">Next visit</span><span class="t">' + esc(day(nx.date)) + '</span><span>' + esc(t12(nx.start)) + ' to ' + esc(t12(nx.end)) + (nx.caregiver ? ' with ' + esc(nx.caregiver.first_name) : '') + '</span>' +
-            (nx.caregiver ? '' : '<span class="small muted">Caregiver to be confirmed</span>') + '</span>' + ICON.chev + '</button>'
-          : '<div class="card next"><span style="flex:1"><span class="label">Next visit</span><br><span class="t">No visits in the next 3 weeks</span></span></div>') +
+      (nx ? '<button class="card next" data-go="visits">' + avatar(nx.caregiver ? { first_name: first(nx.caregiver) } : null) +
+            '<span style="display:flex;flex-direction:column;gap:2px;flex:1"><span class="label">Next visit booked in the app</span><span class="t">' + esc(day(nx.date)) + '</span><span>' + whenOf(nx) + '</span>' +
+            '<span class="small muted">' + esc(statusWords(nx)) + '</span></span>' + ICON.chev + '</button>'
+          : '<button class="card next" data-go="visits"><span style="flex:1"><span class="label">Visits booked in the app</span><br><span class="t">None booked yet</span><br><span class="small muted">Your regular schedule is in AxisCare.</span></span>' + ICON.chev + '</button>') +
       '<div class="body">' + errBox() +
       (waiting.length ? '<div class="warn"><b>' + waiting.length + ' extra visit' + (waiting.length > 1 ? 's' : '') + ' booked.</b> You\'ll see who\'s coming here once a caregiver confirms.</div>' : '') +
       '<div class="tiles">' +
         (h.can_book ? '<button class="tile primary" data-act="book">' + ICON.cal + 'Book a visit</button>' : '') +
         '<button class="tile" data-go="caregivers">' + ICON.people + 'Caregivers</button>' +
-        '<button class="tile" data-go="visits">' + ICON.list + 'Upcoming visits</button>' +
+        '<button class="tile" data-go="visits">' + ICON.list + 'Booked in the app</button>' +
         '<button class="tile" data-go="account">' + ICON.gear + 'Account</button>' +
       '</div>' +
       (h.can_book ? '' : '<div class="note">Your login can see visits. To book, ask the office to turn on booking for you.</div>') +
       '</div><div class="foot"><a class="btn outline" href="' + telHref() + '">Call the office</a><p class="center muted small">' + esc(phone()) + ' · a real person answers, weekdays 8 AM to 6 PM</p></div>'
   }
-  /* Her cancel rule (2026-10-16): free 24 hours or more ahead; inside 24 hours the family can still cancel here, and
+  /* Her cancel rule (2026-10-16): no fee 24 hours or more ahead; inside 24 hours the family can still cancel here, and
      2 hours are charged (the Hub sets the number and has the last word). */
   var lateHours = null
   function LATE_HOURS() { return lateHours || 2 }
@@ -136,13 +145,12 @@
     return (days * 1440 + toMin(s) - c.min) / 60 }
   function cgPhoto(id) { var c = (S.cgs || []).find(function (x) { return x.axiscare_id === String(id) }); return c ? c.photo : null }
   V.visits = function () {
-    var h = S.home, mine = (S.bookings || []).filter(function (b) { return b.status !== 'cancelled' && b.date >= central().date })
-    return top('Upcoming visits', { back: 'home', backLabel: 'Home' }) + '<div class="body">' + errBox() + (S.notice ? '<div class="note" role="status">' + esc(S.notice) + '</div>' : '') +
-      '<div class="list">' + (h.visits.length ? h.visits.map(function (v) {
-        return '<div class="row" style="cursor:default">' + avatar(v.caregiver ? { first_name: v.caregiver.first_name, photo: cgPhoto(v.caregiver.axiscare_id) } : null) +
-          '<span class="grow"><span class="t">' + esc(day(v.date)) + '</span><span>' + esc(t12(v.start)) + ' to ' + esc(t12(v.end)) + '</span><span class="small muted">' + (v.caregiver ? 'with ' + esc(v.caregiver.first_name) : 'Caregiver to be confirmed') + '</span></span></div>'
-      }).join('') : '<p class="muted">No visits in the next 3 weeks.</p>') + '</div>' +
-      (mine.length ? '<h2 style="margin-top:8px">Visits you booked</h2><div class="list">' + mine.map(function (b) {
+    /* Her note 2026-10-16: this screen is ONLY the visits booked in the app, and says so; regular visits are in AxisCare. */
+    var h = S.home, mine = mineAhead()
+    return top('Booked in the app', { back: 'home', backLabel: 'Home' }) + '<div class="body">' + errBox() + (S.notice ? '<div class="note" role="status">' + esc(S.notice) + '</div>' : '') +
+      '<div class="card"><p style="margin:0 0 10px"><b>These are only the visits booked in this app.</b> If you also have regular visits with Caring Companions, see your full schedule in AxisCare.</p>' +
+        '<a class="btn outline" href="' + esc(AXIS) + '" target="_blank" rel="noopener">See the full schedule in AxisCare</a></div>' +
+      (mine.length ? '<div class="list">' + mine.map(function (b) {
         var st = b.status === 'placed' ? '<span class="pill ok">' + esc(b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') + '</span>'
           : b.status === 'practice' ? '<span class="pill wait">Practice (not on the schedule)</span>' : '<span class="pill wait">Finding a caregiver</span>'
         if (!b.start && b.status !== 'practice') st += '<div class="small muted" style="margin-top:4px">The exact time shows here once a caregiver confirms.</div>'
@@ -150,11 +158,11 @@
         var tm = b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours))
         return '<div class="card"><div class="t" style="font-weight:700;color:var(--navy)">' + esc(day(b.date)) + ', ' + tm + '</div><div class="small muted">' + esc((b.tasks || []).join(', ')) + '</div><div>' + st + '</div>' +
           (started ? '<p class="small muted">This visit has started. To change it, call the office at ' + esc(phone()) + '.</p>'
-           : c ? '<div class="warn">' + (late ? 'This visit is less than 24 hours away, so ' + esc(hrs(LATE_HOURS())) + ' will still be charged. Cancel anyway?' : 'Cancel this visit? It\'s free because it\'s more than 24 hours away.') + '</div>' +
+           : c ? '<div class="warn">' + (late ? 'This visit is less than 24 hours away, so ' + esc(hrs(LATE_HOURS())) + ' will still be charged. Cancel anyway?' : 'Cancel this visit? There\'s no fee to cancel because it\'s more than 24 hours away.') + '</div>' +
                  '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '"' + (late ? ' data-late="1"' : '') + '>' + (late ? 'Yes, cancel and charge ' + esc(hrs(LATE_HOURS())) : 'Yes, cancel it') + '</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
            : (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel this visit</button>' : '')) + '</div>'
-      }).join('') + '</div>' : '') +
-      '<p class="muted small">The complete schedule and each visit\'s notes are in <a href="' + esc(AXIS) + '" target="_blank" rel="noopener">AxisCare</a>. Need to change a regular weekly visit? Call the office at ' + esc(phone()) + '.</p></div>'
+      }).join('') + '</div>' : '<p class="muted">No visits booked in the app yet.</p>' + (h.can_book ? '<button class="btn" data-act="book">Book a visit</button>' : '')) +
+      '<p class="muted small">Each visit\'s notes are in AxisCare too. Need to change a regular weekly visit? Call the office at ' + esc(phone()) + '.</p></div>'
   }
   V.caregivers = function () {
     var list = S.cgs || []
@@ -299,7 +307,7 @@
       '<div class="panel">' + (rate ? '<div style="display:flex;justify-content:space-between;align-items:baseline"><span>Estimated · ' + hrs(h) + ' × $' + money(rate) + '</span><span style="font-family:var(--serif);font-size:1.5em;font-weight:600;color:var(--navy)">$' + money(h * rate) + '</span></div>' +
           (extra ? '<p class="small muted">Visits under ' + (S.home.short_under_hours || 4) + ' hours are $' + money(extra) + ' more an hour, to cover drive time between visits.</p>' : '') : '') +
         '<p class="small muted">Nothing is charged today. The final amount, for the time the caregiver is actually there, shows on your weekly invoice with the other visits.</p></div>' +
-      '<p class="small">Free to cancel up to 24 hours before. After that you can still cancel in the app, and 2 hours are charged.</p>' +
+      '<p class="small">No fee to cancel up to 24 hours before. After that you can still cancel in the app, and 2 hours are charged.</p>' +
       '</div><div class="foot"><button class="btn" data-act="confirm"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Booking…' : 'Book this visit') + '</button></div>'
   }
   V.done = function () {
