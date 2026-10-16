@@ -127,6 +127,13 @@
       (h.can_book ? '' : '<div class="note">Your login can see visits. To book, ask the office to turn on booking for you.</div>') +
       '</div><div class="foot"><a class="btn outline" href="' + telHref() + '">Call the office</a><p class="center muted small">' + esc(phone()) + ' · a real person answers, weekdays 8 AM to 6 PM</p></div>'
   }
+  /* Her cancel rule (2026-10-16): free 24 hours or more ahead; inside 24 hours the family can still cancel here, and
+     2 hours are charged (the Hub sets the number and has the last word). */
+  var lateHours = null
+  function LATE_HOURS() { return lateHours || 2 }
+  function hoursUntil(b) { var c = central(), s = b.start || b.window_start || '00:00'
+    var days = Math.round((Date.parse(b.date + 'T12:00:00Z') - Date.parse(c.date + 'T12:00:00Z')) / 86400000)
+    return (days * 1440 + toMin(s) - c.min) / 60 }
   function cgPhoto(id) { var c = (S.cgs || []).find(function (x) { return x.axiscare_id === String(id) }); return c ? c.photo : null }
   V.visits = function () {
     var h = S.home, mine = (S.bookings || []).filter(function (b) { return b.status !== 'cancelled' && b.date >= central().date })
@@ -139,11 +146,13 @@
         var st = b.status === 'placed' ? '<span class="pill ok">' + esc(b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') + '</span>'
           : b.status === 'practice' ? '<span class="pill wait">Practice (not on the schedule)</span>' : '<span class="pill wait">Finding a caregiver</span>'
         if (!b.start && b.status !== 'practice') st += '<div class="small muted" style="margin-top:4px">The exact time shows here once a caregiver confirms.</div>'
-        var c = S.confirmCancel === b.id
+        var c = S.confirmCancel === b.id, left = hoursUntil(b), late = left < 24, started = left <= 0
         var tm = b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours))
         return '<div class="card"><div class="t" style="font-weight:700;color:var(--navy)">' + esc(day(b.date)) + ', ' + tm + '</div><div class="small muted">' + esc((b.tasks || []).join(', ')) + '</div><div>' + st + '</div>' +
-          (c ? '<div class="warn">Cancel this visit? It\'s free up to 24 hours before.</div><div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '">Yes, cancel it</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
-             : (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel this visit</button>' : '')) + '</div>'
+          (started ? '<p class="small muted">This visit has started. To change it, call the office at ' + esc(phone()) + '.</p>'
+           : c ? '<div class="warn">' + (late ? 'This visit is less than 24 hours away, so ' + esc(hrs(LATE_HOURS())) + ' will still be charged. Cancel anyway?' : 'Cancel this visit? It\'s free because it\'s more than 24 hours away.') + '</div>' +
+                 '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '"' + (late ? ' data-late="1"' : '') + '>' + (late ? 'Yes, cancel and charge ' + esc(hrs(LATE_HOURS())) : 'Yes, cancel it') + '</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
+           : (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel this visit</button>' : '')) + '</div>'
       }).join('') + '</div>' : '') +
       '<p class="muted small">The complete schedule and each visit\'s notes are in <a href="' + esc(AXIS) + '" target="_blank" rel="noopener">AxisCare</a>. Need to change a regular weekly visit? Call the office at ' + esc(phone()) + '.</p></div>'
   }
@@ -290,7 +299,7 @@
       '<div class="panel">' + (rate ? '<div style="display:flex;justify-content:space-between;align-items:baseline"><span>Estimated · ' + hrs(h) + ' × $' + money(rate) + '</span><span style="font-family:var(--serif);font-size:1.5em;font-weight:600;color:var(--navy)">$' + money(h * rate) + '</span></div>' +
           (extra ? '<p class="small muted">Visits under ' + (S.home.short_under_hours || 4) + ' hours are $' + money(extra) + ' more an hour, to cover drive time between visits.</p>' : '') : '') +
         '<p class="small muted">Nothing is charged today. The final amount, for the time the caregiver is actually there, shows on your weekly invoice with the other visits.</p></div>' +
-      '<p class="small">Free to cancel up to 24 hours before.</p>' +
+      '<p class="small">Free to cancel up to 24 hours before. After that you can still cancel in the app, and 2 hours are charged.</p>' +
       '</div><div class="foot"><button class="btn" data-act="confirm"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Booking…' : 'Book this visit') + '</button></div>'
   }
   V.done = function () {
@@ -337,7 +346,7 @@
     if (ds.size != null && el.classList.contains('chip')) { document.documentElement.setAttribute('data-size', ds.size); try { localStorage.setItem('cc_text_size', ds.size) } catch (x) { /* fine */ } return render() }
     if (ds.cancel) { S.confirmCancel = ds.cancel; return render() }
     if (ds.cancelNo) { S.confirmCancel = null; return render() }
-    if (ds.cancelYes) return cancel(ds.cancelYes)
+    if (ds.cancelYes) return cancel(ds.cancelYes, ds.late === '1')
     var a = ds.act
     if (a === 'send' || a === 'resend') return sendCode()
     if (a === 'verify') return verify()
@@ -403,10 +412,13 @@
       S.bookings = null; S.view = 'done'; render()
     })
   }
-  function cancel(id) {
+  function cancel(id, lateOk) {
     S.busy = true; render()
-    call('cancel', { booking_id: id }).then(function (r) {
-      S.busy = false; S.confirmCancel = null
+    call('cancel', lateOk ? { booking_id: id, late_ok: true } : { booking_id: id }).then(function (r) {
+      S.busy = false
+      // The Hub says it's inside 24 hours (the clock moved on): show the charge and ask again.
+      if (r.status === 409 && r.data.late) { lateHours = r.data.late_hours || 2; S.err = ''; S.confirmCancel = id; return render() }
+      S.confirmCancel = null
       if (r.status !== 200) { S.err = r.data.error || 'That didn\'t work. Please call the office.'; return render() }
       return Promise.all([call('bookings'), call('home')]).then(function (x) {
         S.bookings = x[0].status === 200 ? x[0].data.bookings : []; if (x[1].status === 200) S.home = x[1].data
