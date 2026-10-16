@@ -1,0 +1,2 @@
+/* Caring Companions family app settings. The sign-in key here is the public one (safe to publish by design). */
+window.CC_CONFIG = {"familyUrl": "https://mwljqemuhlvwkioeplho.supabase.co", "familyAnon": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13bGpxZW11aGx2d2tpb2VwbGhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxMTQxOTQsImV4cCI6MjEwNzY5MDE5NH0.r3FTnGOVmS4taXPuhF8JhFXm7ksxcR-bW-mbvgDCwDY", "gateway": "https://zngsgedlsxinbygwmxwn.supabase.co/functions/v1/family-gateway", "billingUrl": null}
