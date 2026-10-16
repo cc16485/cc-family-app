@@ -21,6 +21,7 @@
   function fromMin(n) { return String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0') }
   function hrs(n) { return (n % 1 ? n.toFixed(1) : String(n)) + ' hours' }
   function first(s) { return String(s || '').split(' ')[0] }
+  function money(n) { var r = Math.round(n * 100) / 100; return r % 1 ? r.toFixed(2) : String(r) }
   var ICON = {
     back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
     chev: '<svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
@@ -224,7 +225,8 @@
       '</div><div class="foot"><button class="btn" data-act="to-book3"' + (b.tasks.length ? '' : ' disabled') + '>Next</button>' + (b.tasks.length ? '' : '<p class="center small muted">Pick at least one</p>') + '</div>'
   }
   V.book3 = function () {
-    var b = S.bk, end = fromMin(toMin(b.start) + b.hours * 60), rate = S.home.rate
+    var b = S.bk, end = fromMin(toMin(b.start) + b.hours * 60), base = S.home.rate
+    var extra = base && S.home.short_extra && b.hours < (S.home.short_under_hours || 4) ? S.home.short_extra : 0, rate = base ? base + extra : null
     var reg = b.cg ? (S.cgs || []).find(function (x) { return x.axiscare_id === b.cg }) : regular()
     var whoTxt = b.who === 'regular' ? (reg ? reg.first_name + ', asked first' : 'Her regular caregiver, asked first') : b.who === 'favorites' ? 'Someone she already knows' : 'Whoever is available'
     return top('Check and book', { back: 'book2', step: 'Step 3 of 3' }) + '<div class="body">' + errBox() +
@@ -233,7 +235,8 @@
         '<div class="sum"><span class="muted">Who</span><span class="v">' + esc(whoTxt) + '</span></div>' +
         '<div class="sum"><span class="muted">Help with</span><span class="v">' + esc(b.tasks.join(', ')) + '</span></div>' +
         (b.note ? '<div class="sum"><span class="muted">Note</span><span class="v">' + esc(b.note) + '</span></div>' : '') + '</div>' +
-      '<div class="panel">' + (rate ? '<div style="display:flex;justify-content:space-between;align-items:baseline"><span>Estimated · ' + hrs(b.hours) + ' × $' + rate + '</span><span style="font-family:var(--serif);font-size:1.5em;font-weight:600;color:var(--navy)">$' + (Math.round(b.hours * rate * 100) / 100) + '</span></div>' : '') +
+      '<div class="panel">' + (rate ? '<div style="display:flex;justify-content:space-between;align-items:baseline"><span>Estimated · ' + hrs(b.hours) + ' × $' + money(rate) + '</span><span style="font-family:var(--serif);font-size:1.5em;font-weight:600;color:var(--navy)">$' + money(b.hours * rate) + '</span></div>' +
+          (extra ? '<p class="small muted">Visits under ' + (S.home.short_under_hours || 4) + ' hours are $' + money(extra) + ' more an hour, to cover drive time between visits.</p>' : '') : '') +
         '<p class="small muted">Nothing is charged today. The final amount, for the time the caregiver is actually there, shows on your weekly invoice with her other visits.</p></div>' +
       '<p class="small">Free to cancel up to 24 hours before.</p>' +
       '</div><div class="foot"><button class="btn" data-act="confirm"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Booking…' : 'Book this visit') + '</button></div>'
