@@ -73,6 +73,24 @@ button, input, textarea { font: inherit; color: inherit; }
 .pill.wait { background: var(--warn-bg); color: var(--honey-text); }
 .pill.ok { background: var(--teal-pale); color: var(--teal-darkest); }
 
+/* booking: month calendar, set time or flexible window */
+.cal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 12px; }
+.cal-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: var(--navy); font-size: 1.05em; }
+.cal-nav { width: 48px; height: 48px; border-radius: 24px; border: 1px solid var(--border); background: var(--card); color: var(--teal); font-size: 1.5em; font-weight: 700; cursor: pointer; }
+.cal-nav[disabled] { opacity: .3; cursor: default; }
+.cal-g { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center; }
+.cal-g small { color: var(--muted); font-weight: 700; font-size: .75em; padding: 4px 0; }
+.cal-d { min-height: 46px; border-radius: 12px; border: 0; background: var(--teal-pale); color: var(--navy); font-weight: 700; cursor: pointer; }
+.cal-d[disabled] { background: transparent; color: #b4bcc4; font-weight: 500; cursor: default; }
+.cal-d.on { background: var(--teal); color: #fff; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--panel); border-radius: 14px; padding: 4px; gap: 4px; }
+.seg button { min-height: 52px; border-radius: 11px; border: 0; background: transparent; font-weight: 700; color: var(--navy); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--teal-deep); box-shadow: 0 2px 6px rgba(13,54,95,.12); }
+.trow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tsel { display: flex; flex-direction: column; gap: 4px; }
+.tsel select { min-height: 56px; border: 1px solid var(--border); border-radius: 14px; padding: 0 12px; background: var(--card); font-weight: 700; color: var(--navy); font-size: 1.05em; }
+.opt .avatar { width: 44px; height: 44px; font-size: 1.1em; }
+
 /* booking */
 .chips { display: grid; gap: 8px; }
 .chips.days { grid-template-columns: repeat(5, minmax(0, 1fr)); }
