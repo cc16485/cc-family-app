@@ -11,7 +11,7 @@
   var app = document.getElementById('app')
   var sb = (!DEMO && window.supabase) ? window.supabase.createClient(C.familyUrl, C.familyAnon, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }) : null
 
-  var S = { view: 'loading', email: '', me: null, client: null, home: null, cgs: null, bookings: null, err: '', busy: false, bk: null, cg: null, sent: false, confirmCancel: null, done: null, notice: '' }
+  var S = { view: 'loading', email: '', me: null, client: null, home: null, cgs: null, bookings: null, err: '', busy: false, bk: null, cg: null, sent: false, confirmCancel: null, done: null, notice: '', chooseCfg: null, interested: null, chooseFor: null }
 
   // ── helpers ─────────────────────────────────────────────────────────────────────────────────────────────────────
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] }) }
@@ -42,13 +42,21 @@
   function top(title, opts) {
     opts = opts || {}
     return '<div class="top' + (opts.tall ? ' tall' : '') + '"><div class="top-row">' +
-      (opts.back ? '<button class="back" data-go="' + esc(opts.back) + '">' + ICON.back + esc(opts.backLabel || 'Back') + '</button>' : '<div class="brand">Caring Companions</div>') +
+      (opts.back ? '<button class="back" data-go="' + esc(opts.back) + '">' + ICON.back + esc(opts.backLabel || 'Back') + '</button>' : '<div class="brand">' + esc(BR() ? BR().short : '') + '</div>') +
       (opts.step ? '<div class="step">' + esc(opts.step) + '</div>' : opts.help ? '<button class="icon-btn" data-go="account" aria-label="Help and account">?</button>' : '') +
       '</div>' + (opts.sub ? '<div class="sub">' + esc(opts.sub) + '</div>' : '') + '<h1>' + esc(title) + '</h1></div>'
   }
   function errBox() { return S.err ? '<div class="err" role="alert">' + esc(S.err) + '</div>' : '' }
-  function phone() { return (S.home && S.home.office_phone) || '(417) 234-8494' }
+  /* Two brands (her plan 2026-10-16): the site's own brand before sign-in (family.mo-care.com = Missouri), then the signed-in
+     client's brand from the Hub. Never a guessed number: no brand known = "call the office" with no number. */
+  var SITE_BRANDS = { 'family.mo-care.com': { key: 'MO', short: 'Caring Companions', name: 'Caring Companions In-Home Senior Care', phone: '(417) 234-8494', logo: 'assets/cc-logo.png' } }
+  var SITE = SITE_BRANDS[location.hostname] || (DEMO_SITE() ? SITE_BRANDS['family.mo-care.com'] : null)
+  function DEMO_SITE() { return !!(window.CC_CONFIG && window.CC_CONFIG.demo) }
+  function BR() { return S.home && ('brand' in S.home) ? S.home.brand : SITE }   // an older Hub answer (no brand field) keeps the site's
+  function bname() { var b = BR(); return b ? b.short : 'the office' }
+  function phone() { var b = BR(); return (S.home && S.home.office_phone) || (b && b.phone) || '' }
   function telHref() { return 'tel:' + phone().replace(/[^0-9+]/g, '') }
+  function callLine(lead) { return phone() ? lead + ' ' + phone() : lead + ' the office' }
 
   // ── talking to the Hub ──────────────────────────────────────────────────────────────────────────────────────────
   function call(action, extra) {
@@ -59,7 +67,7 @@
       if (!tok) return { status: 401, data: { error: 'Please sign in again.' } }
       return fetch(C.gateway, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify(body) })
         .then(function (res) { return res.json().catch(function () { return {} }).then(function (d) { return { status: res.status, data: d } }) })
-    }).catch(function () { return { status: 0, data: { error: "We can't reach Caring Companions right now. Check your connection and try again." } } })
+    }).catch(function () { return { status: 0, data: { error: "We can't reach " + bname() + " right now. Check your connection and try again." } } })
   }
   /* the visits booked in the app from today on, soonest first */
   function mineAhead() {
@@ -72,7 +80,7 @@
   function load(view) {
     S.err = ''; S.busy = true; render()
     return Promise.all([call('home'), call('bookings')]).then(function (both) {
-      var r = both[0]; S.bookings = both[1].status === 200 ? both[1].data.bookings : (S.bookings || [])
+      var r = both[0]; S.bookings = both[1].status === 200 ? both[1].data.bookings : (S.bookings || []); if (both[1].status === 200) S.chooseCfg = both[1].data.choose || null
       S.busy = false
       if (r.status === 401) { S.view = 'signin'; return render() }
       if (r.status !== 200) { S.err = r.data.error || 'Something went wrong.'; return render() }
@@ -101,17 +109,17 @@
   V.loading = function () { return '<div class="loading">Loading…</div>' }
   V.signin = function () {
     return '<div class="body" style="padding-top:28px">' +
-      '<img class="signin-logo" src="assets/cc-logo.png" alt="Caring Companions">' +
+      (BR() && BR().logo ? '<img class="signin-logo" src="' + esc(BR().logo) + '" alt="' + esc(BR().short) + '">' : '') +
       '<h1>Sign in</h1>' +
       (S.sent
         ? '<p>We emailed a 6-digit code to <b>' + esc(S.email) + '</b>. Type it here.</p>' +
           '<label class="q" for="code">Your code</label><input id="code" class="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">' + errBox() +
           '<button class="btn" data-act="verify"' + (S.busy ? ' disabled' : '') + '>Sign in</button>' +
           '<button class="btn quiet" data-act="resend">Send a new code</button><button class="btn quiet" data-act="other-email">Use a different email</button>'
-        : '<p>Use the email address Caring Companions has on file for you or your loved one. We\'ll email you a code. No password needed.</p>' +
+        : '<p>Use the email address ' + (BR() ? esc(BR().short) + ' has' : 'we have') + ' on file for you or your loved one. We\'ll email you a code. No password needed.</p>' +
           '<label class="q" for="email">Your email</label><input id="email" type="email" autocomplete="email" inputmode="email" value="' + esc(S.email) + '" placeholder="you@example.com">' + errBox() +
           '<button class="btn" data-act="send"' + (S.busy ? ' disabled' : '') + '>Email me a code</button>') +
-      '<p class="muted small" style="margin-top:8px">Need help? Call us at (417) 234-8494, weekdays 8 AM to 6 PM.</p></div>'
+      '<p class="muted small" style="margin-top:8px">Need help? ' + esc(callLine(phone() ? 'Call us at' : 'Call')) + ', weekdays 8 AM to 6 PM.</p></div>'
   }
   V.pick = function () {
     return top('Whose care?', { sub: 'Hello, ' + first(S.me && S.me.name) }) + '<div class="body"><div class="list">' +
@@ -134,7 +142,7 @@
         '<button class="tile" data-go="account">' + ICON.gear + 'Account</button>' +
       '</div>' +
       (h.can_book ? '' : '<div class="note">Your login can see visits. To book, ask the office to turn on booking for you.</div>') +
-      '</div><div class="foot"><a class="btn outline" href="' + telHref() + '">Call the office</a><p class="center muted small">' + esc(phone()) + ' · a real person answers, weekdays 8 AM to 6 PM</p></div>'
+      '</div><div class="foot">' + (phone() ? '<a class="btn outline" href="' + telHref() + '">Call the office</a><p class="center muted small">' + esc(phone()) + ' · a real person answers, weekdays 8 AM to 6 PM</p>' : '<p class="center muted small">Questions? Please call the office.</p>') + '</div>'
   }
   /* Her cancel rule (2026-10-16): no fee 24 hours or more ahead; inside 24 hours the family can still cancel here, and
      2 hours are charged (the Hub sets the number and has the last word). */
@@ -148,21 +156,38 @@
     /* Her note 2026-10-16: this screen is ONLY the visits booked in the app, and says so; regular visits are in AxisCare. */
     var h = S.home, mine = mineAhead()
     return top('Booked in the app', { back: 'home', backLabel: 'Home' }) + '<div class="body">' + errBox() + (S.notice ? '<div class="note" role="status">' + esc(S.notice) + '</div>' : '') +
-      '<div class="card"><p style="margin:0 0 10px"><b>These are only the visits booked in this app.</b> If you also have regular visits with Caring Companions, see your full schedule in AxisCare.</p>' +
+      '<div class="card"><p style="margin:0 0 10px"><b>These are only the visits booked in this app.</b> If you also have regular visits with ' + esc(BR() ? BR().short : 'us') + ', see your full schedule in AxisCare.</p>' +
         '<a class="btn outline" href="' + esc(AXIS) + '" target="_blank" rel="noopener">See the full schedule in AxisCare</a></div>' +
       (mine.length ? '<div class="list">' + mine.map(function (b) {
         var st = b.status === 'placed' ? '<span class="pill ok">' + esc(b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') + '</span>'
-          : b.status === 'practice' ? '<span class="pill wait">Practice (not on the schedule)</span>' : '<span class="pill wait">Finding a caregiver</span>'
+          : b.status === 'practice' ? '<span class="pill wait">Practice (not on the schedule)</span>'
+          : b.method === 'choose' ? '<span class="pill wait">You choose · ' + (b.interested ? b.interested + ' interested' : 'asking caregivers') + '</span>' +
+              '<div class="tiles" style="margin-top:8px">' + (b.interested ? '<button class="btn" data-choose-open="' + esc(b.id) + '">See who\'s interested</button>' : '') + '<button class="btn outline" data-choose-auto="' + esc(b.id) + '">Find someone for me instead</button></div>'
+          : '<span class="pill wait">Finding a caregiver</span>'
         if (!b.start && b.status !== 'practice') st += '<div class="small muted" style="margin-top:4px">The exact time shows here once a caregiver confirms.</div>'
         var c = S.confirmCancel === b.id, left = hoursUntil(b), late = left < 24, started = left <= 0
         var tm = b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours))
         return '<div class="card"><div class="t" style="font-weight:700;color:var(--navy)">' + esc(day(b.date)) + ', ' + tm + '</div><div class="small muted">' + esc((b.tasks || []).join(', ')) + '</div><div>' + st + '</div>' +
-          (started ? '<p class="small muted">This visit has started. To change it, call the office at ' + esc(phone()) + '.</p>'
+          (started ? '<p class="small muted">This visit has started. To change it, ' + esc(callLine(phone() ? 'call the office at' : 'call')) + '.</p>'
            : c ? '<div class="warn">' + (late ? 'This visit is less than 24 hours away, so ' + esc(hrs(LATE_HOURS())) + ' will still be charged. Cancel anyway?' : 'Cancel this visit? There\'s no fee to cancel because it\'s more than 24 hours away.') + '</div>' +
                  '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '"' + (late ? ' data-late="1"' : '') + '>' + (late ? 'Yes, cancel and charge ' + esc(hrs(LATE_HOURS())) : 'Yes, cancel it') + '</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
            : (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel this visit</button>' : '')) + '</div>'
       }).join('') + '</div>' : '<p class="muted">No visits booked in the app yet.</p>' + (h.can_book ? '<button class="btn" data-act="book">Book a visit</button>' : '')) +
-      '<p class="muted small">Each visit\'s notes are in AxisCare too. Need to change a regular weekly visit? Call the office at ' + esc(phone()) + '.</p></div>'
+      '<p class="muted small">Each visit\'s notes are in AxisCare too. Need to change a regular weekly visit? ' + esc(callLine(phone() ? 'Call the office at' : 'Call')) + '.</p></div>'
+  }
+  V.choose = function () {
+    var list = S.interested || [], b = (S.bookings || []).find(function (x) { return x.id === S.chooseFor }) || {}
+    return top('Who\'s interested', { back: 'visits', backLabel: 'Back' }) + '<div class="body">' + errBox() +
+      '<p class="small muted">' + esc(day(b.date || '')) + (b.start ? ', ' + esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : '') + '. Pick who you\'d like. They\'re only on the visit once you choose.</p>' +
+      (list.length ? list.map(function (c) {
+        return '<div class="card"><div style="display:flex;gap:12px;align-items:center">' + avatar(c) + '<div><b style="color:var(--navy)">' + esc(c.name) + '</b>' + (c.years ? '<div class="small muted">Caregiving ' + esc(c.years) + ' years</div>' : '') + (c.start && !b.start ? '<div class="small muted">Would start at ' + esc(t12(c.start)) + '</div>' : '') + '</div></div>' +
+          (c.video ? '<video controls playsinline preload="metadata" src="' + esc(c.video) + '"></video>' : '') +
+          (c.about ? '<p><b>About ' + esc(c.first_name) + '.</b> ' + esc(c.about) + '</p>' : '') +
+          (c.experience ? '<p><b>Experience.</b> ' + esc(c.experience) + '</p>' : '') +
+          (c.why ? '<p class="quote">' + esc(c.why) + '</p>' : '') +
+          '<button class="btn" data-choose-pick="' + esc(c.offer_id) + '"' + (S.busy ? ' disabled' : '') + '>Choose ' + esc(c.first_name) + '</button></div>'
+      }).join('') : '<p class="muted">Nobody yet. We\'re still asking, and you\'ll see them here as they say yes.</p>') +
+      '<button class="btn outline" data-choose-auto="' + esc(S.chooseFor || '') + '">Find someone for me instead</button></div>'
   }
   V.caregivers = function () {
     var list = S.cgs || []
@@ -179,7 +204,7 @@
       (c.about ? '<div class="card"><h3>About ' + esc(c.first_name) + '</h3><p>' + esc(c.about) + '</p></div>' : '') +
       (c.why ? '<div class="card"><h3>Why ' + esc(c.first_name) + ' does this work</h3><p class="quote">' + esc(c.why) + '</p></div>' : '') +
       (c.experience ? '<div class="card"><h3>Experience</h3><p>' + esc(c.experience) + '</p></div>' : '') +
-      '<div class="panel small">Every Caring Companions caregiver passes a background check and is trained by us.</div></div>' +
+      '<div class="panel small">Every ' + esc(BR() ? BR().short + ' ' : '') + 'caregiver passes a background check and is trained by us.</div></div>' +
       (S.home.can_book ? '<div class="foot"><button class="btn" data-act="book-with" data-id="' + esc(c.axiscare_id) + '">Book a visit with ' + esc(c.first_name) + '</button></div>' : '')
   }
   V.account = function () {
@@ -191,7 +216,7 @@
       '<div class="card"><h3>Text size</h3><div class="chips times" role="group" aria-label="Text size">' +
         ['Normal', 'Large', 'Largest'].map(function (l, i) { return '<button class="chip" data-size="' + i + '" aria-pressed="' + (String(i) === z) + '" style="font-size:' + (1 + i * .15) + 'em">' + l + '</button>' }).join('') + '</div></div>' +
       (S.me && S.me.clients.length > 1 ? '<button class="btn outline" data-go="pick">Switch to someone else\'s care</button>' : '') +
-      '<a class="btn outline" href="' + telHref() + '">Call the office · ' + esc(phone()) + '</a>' +
+      (phone() ? '<a class="btn outline" href="' + telHref() + '">Call the office · ' + esc(phone()) + '</a>' : '') +
       '<button class="btn quiet" data-act="signout">Sign out</button></div>'
   }
 
@@ -212,7 +237,7 @@
   function bkHours(b) { return b.mode === 'set' ? (toMin(b.end) - toMin(b.start)) / 60 : b.len }
   function newBooking(cg) {
     var d = firstBookable()
-    S.bk = { date: d, month: (d || central().date).slice(0, 7), mode: 'set', start: '09:00', end: '12:00', wFrom: '09:00', wTo: '15:00', len: 3, picks: cg ? [String(cg)] : [], any: !cg, tasks: [], note: '' }
+    S.bk = { date: d, month: (d || central().date).slice(0, 7), mode: 'set', start: '09:00', end: '12:00', wFrom: '09:00', wTo: '15:00', len: 3, picks: cg ? [String(cg)] : [], any: !cg, tasks: [], note: '', method: 'auto' }
     if (d) fixTimes()
   }
   // keep every time inside the day's hours, the 2-hour minimum and the notice
@@ -278,9 +303,18 @@
       '<div><label class="q" for="note">Anything the caregiver should know?</label><textarea id="note" maxlength="1000" placeholder="For example: Mom would love help making soup, and a short walk if it\'s nice out.">' + esc(b.note) + '</textarea></div>' +
       '</div><div class="foot"><button class="btn" data-act="to-book4"' + (b.tasks.length ? '' : ' disabled') + '>Next</button>' + (b.tasks.length ? '' : '<p class="center small muted">Pick at least one</p>') + '</div>'
   }
+  /* Let me choose (her yes 2026-10-16): "Find someone for me" (recommended, fastest) or "Let me choose" (caregivers say
+     they're interested and the family picks from their profiles). Shown only when it's on and the visit is far enough away. */
+  function chooseOk(b) { var c = S.chooseCfg; return !!(c && c.live && b && b.date && hoursUntil({ date: b.date, start: b.mode === 'set' ? b.start : b.wFrom }) >= (c.min_lead_hours || 30)) }
   V.book4 = function () {
     var b = S.bk, list = S.cgs || []
-    return top('Who would you like to come?', { back: 'book3', step: 'Step 4 of ' + STEPS }) + '<div class="body">' + errBox() +
+    if (b.method === 'choose' && !chooseOk(b)) b.method = 'auto'
+    var mopt = function (k, t, sub) { return '<button class="opt" data-method="' + k + '" aria-pressed="' + (b.method === k) + '"><span style="flex:1"><b style="color:var(--navy)">' + t + '</b><br><span class="small muted">' + sub + '</span></span><span class="box">' + (b.method === k ? '<span style="color:#fff">' + ICON.check + '</span>' : '') + '</span></button>' }
+    var methods = chooseOk(b) ? '<div class="list">' + mopt('auto', 'Find someone for me', 'Recommended. The fastest way to get a caregiver.') + mopt('choose', 'Let me choose', 'See the caregivers who are interested, with their profiles, and pick one.') + '</div>' : ''
+    if (b.method === 'choose') return top('Who would you like to come?', { back: 'book3', step: 'Step 4 of ' + STEPS }) + '<div class="body">' + errBox() + methods +
+      '<p class="small muted">We\'ll ask caregivers who know ' + esc(S.home.client.name) + ' first, then others on our team. You\'ll see who\'s interested here and choose. If you haven\'t picked by the day before, we\'ll pick for you.</p>' +
+      '</div><div class="foot"><button class="btn" data-go="book5">Review</button></div>'
+    return top('Who would you like to come?', { back: 'book3', step: 'Step 4 of ' + STEPS }) + '<div class="body">' + errBox() + methods +
       (list.length ? '<p class="small muted">Pick one or more. We ask them first, and the first one who says yes is yours.</p>' : '') +
       '<div class="list">' + list.map(function (c) {
         var on = b.picks.indexOf(c.axiscare_id) >= 0
@@ -297,7 +331,7 @@
   V.book5 = function () {
     var b = S.bk, h = bkHours(b), base = S.home.rate
     var extra = base && S.home.short_extra && h < (S.home.short_under_hours || 4) ? S.home.short_extra : 0, rate = base ? base + extra : null
-    var whoTxt = b.picks.length ? 'Asking ' + pickNames(b) + ' first, then others on our team if needed' : 'Whoever is available'
+    var whoTxt = b.method === 'choose' ? 'You choose, from the caregivers who are interested' : b.picks.length ? 'Asking ' + pickNames(b) + ' first, then others on our team if needed' : 'Whoever is available'
     return top('Check and book', { back: 'book4', step: 'Step 5 of ' + STEPS }) + '<div class="body">' + errBox() +
       '<div class="card" style="gap:0;padding:4px 16px">' +
         '<div class="sum"><span class="muted">When</span><span class="v">' + esc(day(b.date)) + '<br>' + esc(whenLine(b)) + '</span></div>' +
@@ -313,7 +347,7 @@
   V.done = function () {
     var d = S.done
     return '<div class="body center" style="padding-top:40px;display:flex;flex-direction:column;gap:14px"><div class="big-check">' + ICON.bigcheck + '</div>' +
-      '<h1>' + (d.status === 'practice' ? 'Got it (practice)' : 'You\'re booked') + '</h1><p>' + esc(day(d.date)) + '<br><b>' + esc(d.when) + '</b></p>' +
+      '<h1>' + (d.status === 'practice' ? 'Got it (practice)' : d.choose ? 'Got it' : 'You\'re booked') + '</h1><p>' + esc(day(d.date)) + '<br><b>' + esc(d.when) + '</b></p>' +
       '<div class="card" style="text-align:left"><p>' + esc(d.message) + '</p></div></div>' +
       '<div class="foot"><button class="btn" data-act="home-reload">Back to home</button></div>'
   }
@@ -329,7 +363,7 @@
     if (view === 'caregivers' || view === 'visits' || view === 'book1' || view === 'book4') {
       var need = []
       if (!S.cgs) need.push(call('caregivers').then(function (r) { S.cgs = r.status === 200 ? r.data.caregivers : [] }))
-      if (view === 'visits') need.push(call('bookings').then(function (r) { S.bookings = r.status === 200 ? r.data.bookings : [] }))
+      if (view === 'visits') need.push(call('bookings').then(function (r) { S.bookings = r.status === 200 ? r.data.bookings : []; if (r.status === 200) S.chooseCfg = r.data.choose || null }))
       if (need.length) { S.view = 'loading'; render(); return Promise.all(need).then(function () { S.view = view; render() }) }
     }
     S.view = view; render()
@@ -352,6 +386,10 @@
     }
     if (ds.task) { var i = S.bk.tasks.indexOf(ds.task); if (i >= 0) S.bk.tasks.splice(i, 1); else S.bk.tasks.push(ds.task); keepNote(); return render() }
     if (ds.size != null && el.classList.contains('chip')) { document.documentElement.setAttribute('data-size', ds.size); try { localStorage.setItem('cc_text_size', ds.size) } catch (x) { /* fine */ } return render() }
+    if (ds.method) { S.bk.method = ds.method; return render() }
+    if (ds.chooseOpen) return openChoose(ds.chooseOpen)
+    if (ds.choosePick) return choosePlace('choose', S.chooseFor, ds.choosePick)
+    if (ds.chooseAuto) return choosePlace('auto', ds.chooseAuto)
     if (ds.cancel) { S.confirmCancel = ds.cancel; return render() }
     if (ds.cancelNo) { S.confirmCancel = null; return render() }
     if (ds.cancelYes) return cancel(ds.cancelYes, ds.late === '1')
@@ -391,12 +429,12 @@
         if (!d || d.ok !== true) { S.busy = false; S.err = (d && d.error) || 'We couldn\'t check that just now. Please try again.'; return render() }
         return sb.auth.signInWithOtp({ email: S.email, options: { shouldCreateUser: false } }).then(function (r) {
           S.busy = false
-          if (r.error) S.err = /rate|seconds|too many/i.test(r.error.message) ? 'Please wait a minute, then ask for a new code.' : 'We couldn\'t send the code. Please try again, or call us at (417) 234-8494.'
+          if (r.error) S.err = /rate|seconds|too many/i.test(r.error.message) ? 'Please wait a minute, then ask for a new code.' : 'We couldn\'t send the code. Please try again, or ' + callLine(phone() ? 'call us at' : 'call') + '.'
           else S.sent = true
           render()
         })
       })
-      .catch(function () { S.busy = false; S.err = "We can't reach Caring Companions right now. Check your connection and try again."; render() })
+      .catch(function () { S.busy = false; S.err = "We can't reach " + bname() + " right now. Check your connection and try again."; render() })
   }
   function verify() {
     var code = (document.getElementById('code') || {}).value || ''
@@ -413,11 +451,31 @@
   function confirm() {
     var b = S.bk; S.busy = true; S.err = ''; render()
     var when = b.mode === 'set' ? { kind: 'set', start: b.start, end: b.end } : { kind: 'flex', window_start: b.wFrom, window_end: b.wTo, hours: b.len }
-    call('book', Object.assign({ date: b.date, tasks: b.tasks, note: b.note, who: b.picks.length ? 'preferred' : 'any', preferred: b.picks }, when)).then(function (r) {
+    var choose = b.method === 'choose'
+    call('book', Object.assign({ date: b.date, tasks: b.tasks, note: b.note, method: choose ? 'choose' : 'auto', who: !choose && b.picks.length ? 'preferred' : 'any', preferred: choose ? [] : b.picks }, when)).then(function (r) {
       S.busy = false
       if (r.status !== 200) { S.err = r.data.error || 'Something went wrong. Nothing was booked.'; return render() }
-      S.done = { date: b.date, when: whenLine(b), status: r.data.status, message: r.data.message }
+      S.done = { date: b.date, when: whenLine(b), status: r.data.status, message: r.data.message, choose: choose }
       S.bookings = null; S.view = 'done'; render()
+    })
+  }
+  function openChoose(id, err) {
+    S.busy = true; S.err = ''; render()
+    call('interested', { booking_id: id }).then(function (r) {
+      S.busy = false
+      if (r.status !== 200) { S.err = r.data.error || 'That didn\'t work. Please try again.'; return render() }
+      S.interested = r.data.caregivers || []; S.chooseFor = id; S.view = 'choose'; S.err = err || ''; render()
+    })
+  }
+  function choosePlace(action, id, offerId) {
+    S.busy = true; S.err = ''; render()
+    call(action, action === 'choose' ? { booking_id: id, offer_id: offerId } : { booking_id: id }).then(function (r) {
+      S.busy = false
+      if (r.status !== 200) { var e = r.data.error || 'That didn\'t work. Please try again.'; if (action === 'choose') return openChoose(id, e); S.err = e; return render() }
+      return call('bookings').then(function (x) {
+        S.bookings = x.status === 200 ? x.data.bookings : []; S.interested = null; S.chooseFor = null
+        S.view = 'visits'; S.notice = r.data.message || 'Done.'; render(); S.notice = ''
+      })
     })
   }
   function cancel(id, lateOk) {
@@ -429,7 +487,7 @@
       S.confirmCancel = null
       if (r.status !== 200) { S.err = r.data.error || 'That didn\'t work. Please call the office.'; return render() }
       return Promise.all([call('bookings'), call('home')]).then(function (x) {
-        S.bookings = x[0].status === 200 ? x[0].data.bookings : []; if (x[1].status === 200) S.home = x[1].data
+        S.bookings = x[0].status === 200 ? x[0].data.bookings : []; if (x[0].status === 200) S.chooseCfg = x[0].data.choose || null; if (x[1].status === 200) S.home = x[1].data
         S.err = ''; S.view = 'visits'; S.notice = r.data.message || 'Cancelled.'; render(); S.notice = ''
       })
     })
