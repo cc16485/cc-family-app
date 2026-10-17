@@ -76,7 +76,10 @@
       .sort(function (a, b) { return (a.date + (a.start || a.window_start || '')).localeCompare(b.date + (b.start || b.window_start || '')) })
   }
   function whenOf(b) { return b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours)) }
-  function statusWords(b) { return b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)' : 'Finding a caregiver' }
+  /* Release 1 (her approval 2026-10-17): it's a request until a caregiver accepts; never "booked" before that. */
+  function statusWords(b) { return b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)'
+    : b.status === 'not_filled' ? 'No caregiver was available' : 'Request sent, asking caregivers' + (b.answer_by_words ? '. You\'ll hear by ' + b.answer_by_words : '') }
+  function isRequest(b) { return b.status !== 'placed' && b.status !== 'practice' && b.status !== 'not_filled' && !b.caregiver }
   function load(view) {
     S.err = ''; S.busy = true; render()
     return Promise.all([call('home'), call('bookings')]).then(function (both) {
@@ -126,22 +129,22 @@
       S.me.clients.map(function (c) { return '<button class="row" data-pick="' + esc(c.id) + '"><span class="grow"><span class="t">' + esc(c.name) + '</span></span>' + ICON.chev + '</button>' }).join('') + '</div></div>'
   }
   V.home = function () {
-    var h = S.home, nx = mineAhead()[0], name = h.client.name
+    var h = S.home, nx = mineAhead().filter(function (b) { return b.status !== 'not_filled' })[0], name = h.client.name
     var waiting = h.waiting.filter(function (w) { return w.status !== 'practice' })
     return top('Visits for ' + name, { tall: true, help: true, sub: 'Hello, ' + first(S.me && S.me.name) }) +
       (nx ? '<button class="card next" data-go="visits">' + avatar(nx.caregiver ? { first_name: first(nx.caregiver) } : null) +
-            '<span style="display:flex;flex-direction:column;gap:2px;flex:1"><span class="label">Next visit booked in the app</span><span class="t">' + esc(day(nx.date)) + '</span><span>' + whenOf(nx) + '</span>' +
+            '<span style="display:flex;flex-direction:column;gap:2px;flex:1"><span class="label">' + (nx && isRequest(nx) ? 'Your request in the app' : 'Next visit booked in the app') + '</span><span class="t">' + esc(day(nx.date)) + '</span><span>' + whenOf(nx) + '</span>' +
             '<span class="small muted">' + esc(statusWords(nx)) + '</span></span>' + ICON.chev + '</button>'
-          : '<button class="card next" data-go="visits"><span style="flex:1"><span class="label">Visits booked in the app</span><br><span class="t">None booked yet</span><br><span class="small muted">Your regular schedule is in AxisCare.</span></span>' + ICON.chev + '</button>') +
+          : '<button class="card next" data-go="visits"><span style="flex:1"><span class="label">Visits booked in the app</span><br><span class="t">Nothing requested yet</span><br><span class="small muted">Your regular schedule is in AxisCare.</span></span>' + ICON.chev + '</button>') +
       '<div class="body">' + errBox() +
-      (waiting.length ? '<div class="warn"><b>' + waiting.length + ' extra visit' + (waiting.length > 1 ? 's' : '') + ' booked.</b> You\'ll see who\'s coming here once a caregiver confirms.</div>' : '') +
+      (waiting.length ? '<div class="warn"><b>' + waiting.length + ' request' + (waiting.length > 1 ? 's' : '') + ' waiting for a caregiver.</b> Nothing is scheduled until a caregiver accepts. You\'ll see who\'s coming here once they do.</div>' : '') +
       '<div class="tiles">' +
-        (h.can_book ? '<button class="tile primary" data-act="book">' + ICON.cal + 'Book a visit</button>' : '') +
+        (h.can_book ? '<button class="tile primary" data-act="book">' + ICON.cal + 'Request a visit</button>' : '') +
         '<button class="tile" data-go="caregivers">' + ICON.people + 'Caregivers</button>' +
         '<button class="tile" data-go="visits">' + ICON.list + 'Booked in the app</button>' +
         '<button class="tile" data-go="account">' + ICON.gear + 'Account</button>' +
       '</div>' +
-      (h.can_book ? '' : '<div class="note">Your login can see visits. To book, ask the office to turn on booking for you.</div>') +
+      (h.can_book ? '' : '<div class="note">Your login can see visits. To request visits, ask the office to turn on booking for you.</div>') +
       '</div><div class="foot">' + (phone() ? '<a class="btn outline" href="' + telHref() + '">Call the office</a><p class="center muted small">' + esc(phone()) + ' · a real person answers, weekdays 8 AM to 6 PM</p>' : '<p class="center muted small">Questions? Please call the office.</p>') + '</div>'
   }
   /* Her cancel rule (2026-10-16): no fee 24 hours or more ahead; inside 24 hours the family can still cancel here, and
@@ -156,23 +159,31 @@
     /* Her note 2026-10-16: this screen is ONLY the visits booked in the app, and says so; regular visits are in AxisCare. */
     var h = S.home, mine = mineAhead()
     return top('Booked in the app', { back: 'home', backLabel: 'Home' }) + '<div class="body">' + errBox() + (S.notice ? '<div class="note" role="status">' + esc(S.notice) + '</div>' : '') +
-      '<div class="card"><p style="margin:0 0 10px"><b>These are only the visits booked in this app.</b> If you also have regular visits with ' + esc(BR() ? BR().short : 'us') + ', see your full schedule in AxisCare.</p>' +
+      '<div class="card"><p style="margin:0 0 10px"><b>These are only the visits and requests made in this app.</b> If you also have regular visits with ' + esc(BR() ? BR().short : 'us') + ', see your full schedule in AxisCare.</p>' +
         '<a class="btn outline" href="' + esc(AXIS) + '" target="_blank" rel="noopener">See the full schedule in AxisCare</a></div>' +
       (mine.length ? '<div class="list">' + mine.map(function (b) {
         var st = b.status === 'placed' ? '<span class="pill ok">' + esc(b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') + '</span>'
           : b.status === 'practice' ? '<span class="pill wait">Practice (not on the schedule)</span>'
           : b.method === 'choose' ? '<span class="pill wait">You choose · ' + (b.interested ? b.interested + ' interested' : 'asking caregivers') + '</span>' +
               '<div class="tiles" style="margin-top:8px">' + (b.interested ? '<button class="btn" data-choose-open="' + esc(b.id) + '">See who\'s interested</button>' : '') + '<button class="btn outline" data-choose-auto="' + esc(b.id) + '">Find someone for me instead</button></div>'
-          : '<span class="pill wait">Finding a caregiver</span>'
-        if (!b.start && b.status !== 'practice') st += '<div class="small muted" style="margin-top:4px">The exact time shows here once a caregiver confirms.</div>'
-        var c = S.confirmCancel === b.id, left = hoursUntil(b), late = left < 24, started = left <= 0
+          : b.status === 'not_filled' ? '<span class="pill wait">No caregiver was available</span><p class="small" style="margin:6px 0">Nothing was scheduled and there\'s no charge.</p>' +
+              (S.home.can_book ? '<button class="btn outline" data-act="book">Request another time</button>' : '')
+          : '<span class="pill wait">Request sent, asking caregivers</span><p class="small" style="margin:6px 0">This isn\'t a scheduled visit yet.' +
+              (b.answer_by_words ? ' You\'ll hear from us by ' + esc(b.answer_by_words) + '.' : '') + '</p>' +
+              (b.two_stage && b.team_from_words ? '<p class="small muted" style="margin:0">' + (b.picks ? 'We\'re asking the caregiver' + (b.picks > 1 ? 's' : '') + ' you picked first. ' : '') + 'Other caregivers on our team are asked from ' + esc(b.team_from_words) + '.</p>' : '')
+        if (!b.start && b.status !== 'practice' && b.status !== 'not_filled') st += '<div class="small muted" style="margin-top:4px">The exact time shows here once a caregiver confirms.</div>'
+        var c = S.confirmCancel === b.id, left = hoursUntil(b), req = isRequest(b) && b.method !== 'choose', late = !req && left < 24, started = left <= 0
         var tm = b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours))
         return '<div class="card"><div class="t" style="font-weight:700;color:var(--navy)">' + esc(day(b.date)) + ', ' + tm + '</div><div class="small muted">' + esc((b.tasks || []).join(', ')) + '</div><div>' + st + '</div>' +
-          (started ? '<p class="small muted">This visit has started. To change it, ' + esc(callLine(phone() ? 'call the office at' : 'call')) + '.</p>'
+          (b.status === 'not_filled' ? ''
+           : req && c ? '<div class="warn">Cancel this request? Nothing is scheduled yet, so there\'s no charge.</div>' +
+                 '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '">Yes, cancel the request</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
+           : req ? (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel request</button>' : '')
+           : started ? '<p class="small muted">This visit has started. To change it, ' + esc(callLine(phone() ? 'call the office at' : 'call')) + '.</p>'
            : c ? '<div class="warn">' + (late ? 'This visit is less than 24 hours away, so ' + esc(hrs(LATE_HOURS())) + ' will still be charged. Cancel anyway?' : 'Cancel this visit? There\'s no fee to cancel because it\'s more than 24 hours away.') + '</div>' +
                  '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '"' + (late ? ' data-late="1"' : '') + '>' + (late ? 'Yes, cancel and charge ' + esc(hrs(LATE_HOURS())) : 'Yes, cancel it') + '</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
            : (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel this visit</button>' : '')) + '</div>'
-      }).join('') + '</div>' : '<p class="muted">No visits booked in the app yet.</p>' + (h.can_book ? '<button class="btn" data-act="book">Book a visit</button>' : '')) +
+      }).join('') + '</div>' : '<p class="muted">No visits booked in the app yet.</p>' + (h.can_book ? '<button class="btn" data-act="book">Request a visit</button>' : '')) +
       '<p class="muted small">Each visit\'s notes are in AxisCare too. Need to change a regular weekly visit? ' + esc(callLine(phone() ? 'Call the office at' : 'Call')) + '.</p></div>'
   }
   V.choose = function () {
@@ -205,7 +216,7 @@
       (c.why ? '<div class="card"><h3>Why ' + esc(c.first_name) + ' does this work</h3><p class="quote">' + esc(c.why) + '</p></div>' : '') +
       (c.experience ? '<div class="card"><h3>Experience</h3><p>' + esc(c.experience) + '</p></div>' : '') +
       '<div class="panel small">Every ' + esc(BR() ? BR().short + ' ' : '') + 'caregiver passes a background check and is trained by us.</div></div>' +
-      (S.home.can_book ? '<div class="foot"><button class="btn" data-act="book-with" data-id="' + esc(c.axiscare_id) + '">Book a visit with ' + esc(c.first_name) + '</button></div>' : '')
+      (S.home.can_book ? '<div class="foot"><button class="btn" data-act="book-with" data-id="' + esc(c.axiscare_id) + '">Request a visit with ' + esc(c.first_name) + '</button></div>' : '')
   }
   V.account = function () {
     var z = document.documentElement.getAttribute('data-size') || '0'
@@ -226,10 +237,13 @@
   var MONL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
   var DAYL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   function dow(d) { return new Date(d + 'T12:00:00Z').getUTCDay() }
-  function earliest(d) { var h = HRS(), c = central(), m = toMin(h.open); if (d === c.date) { var n = c.min + h.notice_hours * 60; m = Math.max(m, Math.ceil(n / 30) * 30) } return m }
+  function earliest(d) { var h = HRS(), c = central(), m = toMin(h.open); if (d === c.date) { var n = c.min + h.notice_hours * 60; m = Math.max(m, Math.ceil(n / 30) * 30) }
+    var e = serverEarliest(d); if (e && e !== 'none') m = Math.max(m, toMin(e)); return m }
+  /* Release 1: the Hub says the earliest start that still leaves time to ask caregivers (today to the day after); null = none that day. */
+  function serverEarliest(d) { var e = S.home && S.home.earliest; return e && Object.prototype.hasOwnProperty.call(e, d) ? (e[d] || 'none') : null }
   function bookable(d) {
     var h = HRS(), c = central()
-    if (d < c.date || d > addDays(c.date, h.max_days) || h.days.indexOf(dow(d)) < 0) return false
+    if (d < c.date || d > addDays(c.date, h.max_days) || h.days.indexOf(dow(d)) < 0 || serverEarliest(d) === 'none') return false
     return earliest(d) + h.min_hours * 60 <= toMin(h.close)
   }
   function firstBookable() { var d = central().date; for (var i = 0; i <= HRS().max_days; i++) { if (bookable(d)) return d; d = addDays(d, 1) } return null }
@@ -275,7 +289,7 @@
       '<div class="cal"><div class="cal-top"><button class="cal-nav" data-month="-1" aria-label="Previous month"' + (canPrev ? '' : ' disabled') + '>‹</button><b>' + MONL[mo] + ' ' + y + '</b>' +
         '<button class="cal-nav" data-month="1" aria-label="Next month"' + (canNext ? '' : ' disabled') + '>›</button></div>' +
         '<div class="cal-g">' + DAYL.map(function (x) { return '<small aria-hidden="true">' + x.charAt(0) + '</small>' }).join('') + cells + '</div></div>' +
-      '<p class="small muted">' + esc(daysWords()) + ', ' + esc(t12(h.open)) + ' to ' + esc(t12(h.close)) + '. Book at least ' + esc(hrs(h.notice_hours)) + ' ahead, up to ' + h.max_days + ' days out.</p>' +
+      '<p class="small muted">' + esc(daysWords()) + ', ' + esc(t12(h.open)) + ' to ' + esc(t12(h.close)) + '. Request at least ' + esc(hrs(h.notice_hours)) + ' ahead, up to ' + h.max_days + ' days out.</p>' +
       '</div><div class="foot">' + (b.date ? '<p class="center"><b>' + esc(day(b.date)) + '</b></p>' : '') + '<button class="btn" data-go="book2"' + (b.date ? '' : ' disabled') + '>Next</button></div>'
   }
   V.book2 = function () {
@@ -291,6 +305,7 @@
         '<div class="note">The caregiver picks the exact start inside your window, so more caregivers can say yes. The exact time shows here once a caregiver confirms.</div>'
     return top('What time works?', { back: 'book1', step: 'Step 2 of ' + STEPS }) + '<div class="body">' + errBox() +
       '<p class="muted">' + esc(day(b.date)) + '</p>' +
+      (serverEarliest(b.date) && serverEarliest(b.date) !== 'none' && toMin(serverEarliest(b.date)) > toMin(h.open) ? '<p class="small muted">Earliest you can request now: <b>' + esc(t12(serverEarliest(b.date))) + '</b>. That leaves time to ask caregivers.</p>' : '') +
       '<div class="seg" role="group" aria-label="Time choice"><button data-mode="set" aria-pressed="' + set + '">A set time</button><button data-mode="flex" aria-pressed="' + !set + '">I\'m flexible</button></div>' + body +
       '</div><div class="foot"><p class="center"><b>' + esc(whenLine(b)) + '</b></p><button class="btn" data-go="book3">Next</button></div>'
   }
@@ -327,6 +342,8 @@
   /* Her ask 2026-10-16: say plainly how asking works (it is how family-offer runs: picks first; the team as soon as they
      all say no, or after 4 hours without an answer, sooner when the visit is close; first yes wins). */
   function askingWords(b) {
+    var far = b.date > addDays(central().date, 7)
+    if (far) return '<div class="note"><b>How we ask</b><br>' + (b.picks.length ? 'We\'ll ask ' + esc(pickNames(b)) + ' now. Other caregivers on our team are asked starting 7 days before the visit, if needed.' : 'Because the visit is more than a week away, we start asking caregivers 7 days before.') + ' The first one who says yes is yours.</div>'
     if (!b.picks.length) return '<p class="small muted">We ask caregivers on our team, starting with those who know ' + esc(S.home.client.name) + '. The first one who says yes is yours.</p>'
     var who = pickNames(b), one = b.picks.length === 1
     return '<div class="note"><b>How we ask</b><br>We\'ll ask ' + esc(who) + ' first. If ' + (one ? esc(who) + ' can\'t' : 'none of them can') + ', we ask others on our team right away. If ' +
@@ -340,7 +357,12 @@
     var b = S.bk, h = bkHours(b), base = S.home.rate
     var extra = base && S.home.short_extra && h < (S.home.short_under_hours || 4) ? S.home.short_extra : 0, rate = base ? base + extra : null
     var whoTxt = b.method === 'choose' ? 'You choose, from the caregivers who are interested' : b.picks.length ? 'Asking ' + pickNames(b) + ' first, then others on our team if needed' : 'Whoever is available'
-    return top('Check and book', { back: 'book4', step: 'Step 5 of ' + STEPS }) + '<div class="body">' + errBox() +
+    var key = b.date + ' ' + (b.mode === 'set' ? b.start : b.wFrom), w = S.when && S.when.key === key ? S.when : null
+    if (!w && !S.whenBusy) whenCheck(key, b.date, b.mode === 'set' ? b.start : b.wFrom)
+    var heads = !w ? '<p class="small muted">Checking when you\'ll hear back…</p>'
+      : w.ok ? '<div class="note"><b>This is a request.</b> We\'ll check caregiver availability. Your visit isn\'t scheduled until a caregiver accepts and we confirm it. You\'ll hear from us by <b>' + esc(w.answer_by_words) + '</b>' + (w.two_stage ? ' at the latest' : '') + '.</div>'
+      : '<div class="warn">' + esc(w.error || 'That time is too soon to request in the app.') + '</div>'
+    return top('Check and send', { back: 'book4', step: 'Step 5 of ' + STEPS }) + '<div class="body">' + errBox() + heads +
       '<div class="card" style="gap:0;padding:4px 16px">' +
         '<div class="sum"><span class="muted">When</span><span class="v">' + esc(day(b.date)) + '<br>' + esc(whenLine(b)) + '</span></div>' +
         '<div class="sum"><span class="muted">Who</span><span class="v">' + esc(whoTxt) + '</span></div>' +
@@ -349,13 +371,14 @@
       '<div class="panel">' + (rate ? '<div style="display:flex;justify-content:space-between;align-items:baseline"><span>Estimated · ' + hrs(h) + ' × $' + money(rate) + '</span><span style="font-family:var(--serif);font-size:1.5em;font-weight:600;color:var(--navy)">$' + money(h * rate) + '</span></div>' +
           (extra ? '<p class="small muted">Visits under ' + (S.home.short_under_hours || 4) + ' hours are $' + money(extra) + ' more an hour, to cover drive time between visits.</p>' : '') : '') +
         '<p class="small muted">Nothing is charged today. The final amount, for the time the caregiver is actually there, shows on your weekly invoice with the other visits.</p></div>' +
-      '<p class="small">No fee to cancel up to 24 hours before. After that you can still cancel in the app, and 2 hours are charged.</p>' +
-      '</div><div class="foot"><button class="btn" data-act="confirm"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Booking…' : 'Book this visit') + '</button></div>'
+      '<p class="small">You can cancel a request any time before a caregiver accepts, at no charge. Once it\'s confirmed: no fee to cancel up to 24 hours before. After that you can still cancel in the app, and 2 hours are charged.</p>' +
+      '</div><div class="foot">' + (w && !w.ok ? '<button class="btn" data-go="book2">Pick a later time</button>'
+        : '<button class="btn" data-act="confirm"' + (S.busy || !w ? ' disabled' : '') + '>' + (S.busy ? 'Sending…' : 'Send request') + '</button>') + '</div>'
   }
   V.done = function () {
     var d = S.done
     return '<div class="body center" style="padding-top:40px;display:flex;flex-direction:column;gap:14px"><div class="big-check">' + ICON.bigcheck + '</div>' +
-      '<h1>' + (d.status === 'practice' ? 'Got it (practice)' : d.choose ? 'Got it' : 'You\'re booked') + '</h1><p>' + esc(day(d.date)) + '<br><b>' + esc(d.when) + '</b></p>' +
+      '<h1>' + (d.status === 'practice' ? 'Got it (practice)' : d.choose ? 'Got it' : 'Request sent') + '</h1><p>' + esc(day(d.date)) + '<br><b>' + esc(d.when) + '</b></p>' +
       '<div class="card" style="text-align:left"><p>' + esc(d.message) + '</p></div></div>' +
       '<div class="foot"><button class="btn" data-act="home-reload">Back to home</button></div>'
   }
@@ -462,9 +485,17 @@
     var choose = b.method === 'choose'
     call('book', Object.assign({ date: b.date, tasks: b.tasks, note: b.note, method: choose ? 'choose' : 'auto', who: !choose && b.picks.length ? 'preferred' : 'any', preferred: choose ? [] : b.picks }, when)).then(function (r) {
       S.busy = false
-      if (r.status !== 200) { S.err = r.data.error || 'Something went wrong. Nothing was booked.'; return render() }
+      if (r.status !== 200) { S.err = r.data.error || 'Something went wrong. Nothing was sent.'; S.when = null; return render() }
       S.done = { date: b.date, when: whenLine(b), status: r.data.status, message: r.data.message, choose: choose }
       S.bookings = null; S.view = 'done'; render()
+    })
+  }
+  function whenCheck(key, date, start) {
+    S.whenBusy = true
+    call('when', { date: date, start: start }).then(function (r) {
+      S.whenBusy = false
+      S.when = r.status === 200 ? Object.assign({ key: key }, r.data) : { key: key, ok: true, answer_by_words: 'the evening before' }
+      if (S.view === 'book5') render()
     })
   }
   function openChoose(id, err) {
