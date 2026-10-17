@@ -1,6 +1,6 @@
 {
-  "name": "Caring Companions",
-  "short_name": "Caring Companions",
+  "name": "Caring Companions Booking App",
+  "short_name": "Booking App",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#faf9f6",

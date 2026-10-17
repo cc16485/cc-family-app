@@ -1,4 +1,4 @@
-/* Caring Companions family app (Step 1b of the booking plan approved 2026-10-15; flexible booking approved 2026-10-16).
+/* Caring Companions Booking App (renamed 2026-10-17, her ask: "rename it to the Caring Companions Booking App everywhere"; Step 1b of the booking plan approved 2026-10-15; flexible booking approved 2026-10-16).
    Families sign in with a 6-digit code emailed to them (cc-family-app), then everything comes from the Hub's
    family-gateway, which only ever returns their own loved one. Nothing is charged here: visits go on the weekly
    AxisCare invoice. Plain JavaScript, no build step. */
@@ -120,7 +120,7 @@
   V.signin = function () {
     return '<div class="body" style="padding-top:28px">' +
       (BR() && BR().logo ? '<img class="signin-logo" src="' + esc(BR().logo) + '" alt="' + esc(BR().short) + '">' : '') +
-      '<h1>Sign in</h1>' +
+      '<p class="app-name">Caring Companions Booking App</p><h1>Sign in</h1>' +
       (S.sent
         ? '<p>We emailed a 6-digit code to <b>' + esc(S.email) + '</b>. Type it here.</p>' +
           '<label class="q" for="code">Your code</label><input id="code" class="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">' + errBox() +
