@@ -140,7 +140,7 @@
       (nx ? '<button class="card next" data-go="visits">' + avatar(nx.caregiver && !nx.no_caregiver ? { first_name: first(nx.caregiver) } : null) +
             '<span style="display:flex;flex-direction:column;gap:2px;flex:1"><span class="label">' + (nx && isRequest(nx) ? 'Your request in the app' : 'Next visit booked in the app') + '</span><span class="t">' + esc(day(nx.date)) + '</span><span>' + whenOf(nx) + '</span>' +
             '<span class="small muted">' + esc(statusWords(nx)) + '</span></span>' + ICON.chev + '</button>'
-          : '<button class="card next" data-go="visits"><span style="flex:1"><span class="label">Visits booked in the app</span><br><span class="t">Nothing requested yet</span><br><span class="small muted">Your regular schedule is in AxisCare.</span></span>' + ICON.chev + '</button>') +
+          : '<button class="card next" data-go="visits"><span style="flex:1"><span class="label">Visits booked in the app</span><br><span class="t">Nothing requested yet</span><br><span class="small muted">When you\'d like a visit, tap Request a visit.</span></span>' + ICON.chev + '</button>') +
       '<div class="body">' + errBox() +
       (waiting.length ? '<div class="warn"><b>' + waiting.length + ' request' + (waiting.length > 1 ? 's' : '') + ' waiting for a caregiver.</b> Nothing is scheduled until a caregiver accepts. You\'ll see who\'s coming here once they do.</div>' : '') +
       '<div class="tiles">' +
@@ -192,7 +192,7 @@
                  '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '"' + (late ? ' data-late="1"' : '') + '>' + (late ? 'Yes, cancel and charge ' + esc(hrs(LATE_HOURS())) : 'Yes, cancel it') + '</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
            : (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel this visit</button>' : '')) + '</div>'
       }).join('') + '</div>' : '<p class="muted">No visits booked in the app yet.</p>' + (h.can_book ? '<button class="btn" data-act="book">Request a visit</button>' : '')) +
-      '<p class="muted small">Each visit\'s notes are in AxisCare too. Need to change a regular weekly visit? ' + esc(callLine(phone() ? 'Call the office at' : 'Call')) + '.</p></div>'
+      '<p class="muted small">Each visit\'s notes are in AxisCare too. Have regular weekly visits and need to change one? ' + esc(callLine(phone() ? 'Call the office at' : 'Call')) + '.</p></div>'
   }
   V.choose = function () {
     var list = S.interested || [], b = (S.bookings || []).find(function (x) { return x.id === S.chooseFor }) || {}
@@ -292,7 +292,8 @@
       cells += '<button class="cal-d' + (on ? ' on' : '') + '" data-date="' + d + '"' + (ok ? '' : ' disabled') + ' aria-label="' + DAYL[dow(d)] + ', ' + MONL[mo] + ' ' + dd + (ok ? '' : ', not available') + '" aria-pressed="' + on + '">' + dd + '</button>'
     }
     return top('When should we come?', { back: 'home', backLabel: 'Home', step: 'Step 1 of ' + STEPS }) + '<div class="body">' + errBox() +
-      '<div class="note">' + esc(S.home.client.name) + '\'s regular weekly visits are already set. This is for an extra visit.</div>' +
+      /* Samantha 2026-10-17: some families use the app ON ITS OWN, with no set schedule; this note must be true for them too */
+      '<div class="note">Pick a day for this visit. If ' + esc(S.home.client.name) + ' also has regular weekly visits, those stay just as they are.</div>' +
       (firstBookable() ? '' : '<div class="warn">No days are open to book right now. Please call the office at ' + esc(phone()) + '.</div>') +
       '<div class="cal"><div class="cal-top"><button class="cal-nav" data-month="-1" aria-label="Previous month"' + (canPrev ? '' : ' disabled') + '>‹</button><b>' + MONL[mo] + ' ' + y + '</b>' +
         '<button class="cal-nav" data-month="1" aria-label="Next month"' + (canNext ? '' : ' disabled') + '>›</button></div>' +
