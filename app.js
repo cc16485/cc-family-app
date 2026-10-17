@@ -78,9 +78,11 @@
   function whenOf(b) { return b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours)) }
   /* Release 1 (her approval 2026-10-17): it's a request until a caregiver accepts; never "booked" before that. */
   /* Release 2: AxisCare is the truth. A caregiver taken off, or a visit we removed, shows here as it is. */
-  function offWords(b) { return (b.off_caregiver ? b.off_caregiver + ' can\'t come on ' + day(b.date) + '. ' : '') + 'Our office is arranging another caregiver and will update you.' }
+  /* Her wording 2026-10-17 ("Honest + either way"): no promise of a replacement. True because Coverage Help texts when it's
+     covered and the office calls when it can't be. */
+  function offWords(b) { return (b.off_caregiver ? b.off_caregiver + ' can no longer come on ' + DAYL[dow(b.date)] + '. ' : 'This visit doesn\'t have a caregiver right now. ') + 'We\'re checking whether another caregiver can, but we can\'t promise one. We\'ll contact you either way.' }
   function officeCancelWords() { return 'This visit was cancelled by ' + (BR() ? BR().short : 'us') + '.' + (phone() ? ' Questions? Call ' + phone() + '.' : ' Questions? Please call the office.') }
-  function statusWords(b) { return b.by_office ? 'Cancelled by ' + (BR() ? BR().short : 'us') : b.no_caregiver ? 'Our office is arranging a caregiver' : b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)'
+  function statusWords(b) { return b.by_office ? 'Cancelled by ' + (BR() ? BR().short : 'us') : b.no_caregiver ? 'No caregiver right now' : b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)'
     : b.status === 'not_filled' ? 'No caregiver was available' : 'Request sent, asking caregivers' + (b.answer_by_words ? '. You\'ll hear by ' + b.answer_by_words : '') }
   function isRequest(b) { return b.status !== 'placed' && b.status !== 'practice' && b.status !== 'not_filled' && !b.caregiver }
   function load(view) {
@@ -166,7 +168,8 @@
         '<a class="btn outline" href="' + esc(AXIS) + '" target="_blank" rel="noopener">See the full schedule in AxisCare</a></div>' +
       (mine.length ? '<div class="list">' + mine.map(function (b) {
         var st = b.by_office ? '<span class="pill wait">' + esc(statusWords(b)) + '</span><p class="small" style="margin:6px 0">' + esc(officeCancelWords()) + '</p>'
-          : b.no_caregiver ? '<span class="pill wait">Our office is arranging a caregiver</span><p class="small" style="margin:6px 0">' + esc(offWords(b)) + '</p>'
+          : b.no_caregiver ? '<span class="pill wait">No caregiver right now</span><p class="small" style="margin:6px 0">' + esc(offWords(b)) + '</p>' +
+              '<p class="small muted" style="margin:0">You\'re only charged for time a caregiver is actually there.' + (S.home.can_book ? ' You can cancel here at no charge.' : '') + '</p>'
           : b.status === 'placed' ? '<span class="pill ok">' + esc(b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') + '</span>'
           : b.status === 'practice' ? '<span class="pill wait">Practice (not on the schedule)</span>'
           : b.method === 'choose' ? '<span class="pill wait">You choose · ' + (b.interested ? b.interested + ' interested' : 'asking caregivers') + '</span>' +
