@@ -82,9 +82,11 @@
      covered and the office calls when it can't be. */
   function offWords(b) { return (b.off_caregiver ? b.off_caregiver + ' can no longer come on ' + DAYL[dow(b.date)] + '. ' : 'This visit doesn\'t have a caregiver right now. ') + 'We\'re checking whether another caregiver can, but we can\'t promise one. We\'ll contact you either way.' }
   function officeCancelWords() { return 'This visit was cancelled by ' + (BR() ? BR().short : 'us') + '.' + (phone() ? ' Questions? Call ' + phone() + '.' : ' Questions? Please call the office.') }
-  function statusWords(b) { return b.by_office ? 'Cancelled by ' + (BR() ? BR().short : 'us') : b.no_caregiver ? 'No caregiver right now' : b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)'
+  /* Release 3 (decisions 3 and 6): held for the office, declined, Help us fill. Never a promise. */
+  function declinedWords() { return 'We can\'t arrange this request in the app because it includes care our extra visits don\'t cover.' + (phone() ? ' Please call us at ' + phone() + ' so we can help.' : ' Please call the office so we can help.') }
+  function statusWords(b) { return b.held ? 'Being checked by our office' + (b.answer_by_words ? '. You\'ll hear by ' + b.answer_by_words : '') : b.declined ? 'Can\'t arrange in the app' : b.by_office ? 'Cancelled by ' + (BR() ? BR().short : 'us') : b.no_caregiver ? 'No caregiver right now' : b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)'
     : b.status === 'not_filled' ? 'No caregiver was available' : 'Request sent, asking caregivers' + (b.answer_by_words ? '. You\'ll hear by ' + b.answer_by_words : '') }
-  function isRequest(b) { return b.status !== 'placed' && b.status !== 'practice' && b.status !== 'not_filled' && !b.caregiver }
+  function isRequest(b) { return b.status !== 'placed' && b.status !== 'practice' && b.status !== 'not_filled' && b.status !== 'declined' && !b.caregiver }
   function load(view) {
     S.err = ''; S.busy = true; render()
     return Promise.all([call('home'), call('bookings')]).then(function (both) {
@@ -134,13 +136,13 @@
       S.me.clients.map(function (c) { return '<button class="row" data-pick="' + esc(c.id) + '"><span class="grow"><span class="t">' + esc(c.name) + '</span></span>' + ICON.chev + '</button>' }).join('') + '</div></div>'
   }
   V.home = function () {
-    var h = S.home, nx = mineAhead().filter(function (b) { return b.status !== 'not_filled' && !b.by_office })[0], name = h.client.name
+    var h = S.home, nx = mineAhead().filter(function (b) { return b.status !== 'not_filled' && !b.by_office && !b.declined })[0], name = h.client.name
     var waiting = h.waiting.filter(function (w) { return w.status !== 'practice' })
     return top('Visits for ' + name, { tall: true, help: true, sub: 'Hello, ' + first(S.me && S.me.name) }) +
       (nx ? '<button class="card next" data-go="visits">' + avatar(nx.caregiver && !nx.no_caregiver ? { first_name: first(nx.caregiver) } : null) +
             '<span style="display:flex;flex-direction:column;gap:2px;flex:1"><span class="label">' + (nx && isRequest(nx) ? 'Your request in the app' : 'Next visit booked in the app') + '</span><span class="t">' + esc(day(nx.date)) + '</span><span>' + whenOf(nx) + '</span>' +
             '<span class="small muted">' + esc(statusWords(nx)) + '</span></span>' + ICON.chev + '</button>'
-          : '<button class="card next" data-go="visits"><span style="flex:1"><span class="label">Visits booked in the app</span><br><span class="t">Nothing requested yet</span><br><span class="small muted">When you\'d like a visit, tap Request a visit.</span></span>' + ICON.chev + '</button>') +
+          : '<button class="card next" data-go="visits"><span style="flex:1"><span class="label">Visits booked in the app</span><br><span class="t">Nothing requested yet</span><br><span class="small muted">Your regular schedule is in AxisCare.</span></span>' + ICON.chev + '</button>') +
       '<div class="body">' + errBox() +
       (waiting.length ? '<div class="warn"><b>' + waiting.length + ' request' + (waiting.length > 1 ? 's' : '') + ' waiting for a caregiver.</b> Nothing is scheduled until a caregiver accepts. You\'ll see who\'s coming here once they do.</div>' : '') +
       '<div class="tiles">' +
@@ -167,23 +169,26 @@
       '<div class="card"><p style="margin:0 0 10px"><b>These are only the visits and requests made in this app.</b> If you also have regular visits with ' + esc(BR() ? BR().short : 'us') + ', see your full schedule in AxisCare.</p>' +
         '<a class="btn outline" href="' + esc(AXIS) + '" target="_blank" rel="noopener">See the full schedule in AxisCare</a></div>' +
       (mine.length ? '<div class="list">' + mine.map(function (b) {
-        var st = b.by_office ? '<span class="pill wait">' + esc(statusWords(b)) + '</span><p class="small" style="margin:6px 0">' + esc(officeCancelWords()) + '</p>'
+        var st = b.held ? '<span class="pill wait">Being checked by our office</span><p class="small" style="margin:6px 0">Our office needs to check this request before we ask caregivers.' + (b.answer_by_words ? ' You\'ll hear from us by ' + esc(b.answer_by_words) + '.' : '') + ' This isn\'t a scheduled visit yet.</p>'
+          : b.declined ? '<span class="pill wait">Can\'t arrange in the app</span><p class="small" style="margin:6px 0">' + esc(declinedWords()) + '</p>'
+          : b.by_office ? '<span class="pill wait">' + esc(statusWords(b)) + '</span><p class="small" style="margin:6px 0">' + esc(officeCancelWords()) + '</p>'
           : b.no_caregiver ? '<span class="pill wait">No caregiver right now</span><p class="small" style="margin:6px 0">' + esc(offWords(b)) + '</p>' +
               '<p class="small muted" style="margin:0">You\'re only charged for time a caregiver is actually there.' + (S.home.can_book ? ' You can cancel here at no charge.' : '') + '</p>'
           : b.status === 'placed' ? '<span class="pill ok">' + esc(b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') + '</span>'
           : b.status === 'practice' ? '<span class="pill wait">Practice (not on the schedule)</span>'
           : b.method === 'choose' ? '<span class="pill wait">You choose · ' + (b.interested ? b.interested + ' interested' : 'asking caregivers') + '</span>' +
               '<div class="tiles" style="margin-top:8px">' + (b.interested ? '<button class="btn" data-choose-open="' + esc(b.id) + '">See who\'s interested</button>' : '') + '<button class="btn outline" data-choose-auto="' + esc(b.id) + '">Find someone for me instead</button></div>'
-          : b.status === 'not_filled' ? '<span class="pill wait">No caregiver was available</span><p class="small" style="margin:6px 0">Nothing was scheduled and there\'s no charge.</p>' +
+          : b.status === 'not_filled' ? '<span class="pill wait">No caregiver was available</span><p class="small" style="margin:6px 0">' + (b.couldnt ? 'We asked our caregivers and our office also tried, but no one is available. ' : '') + 'Nothing was scheduled and there\'s no charge.</p>' +
               (S.home.can_book ? '<button class="btn outline" data-act="book">Request another time</button>' : '')
           : '<span class="pill wait">Request sent, asking caregivers</span><p class="small" style="margin:6px 0">This isn\'t a scheduled visit yet.' +
               (b.answer_by_words ? ' You\'ll hear from us by ' + esc(b.answer_by_words) + '.' : '') + '</p>' +
+              (b.help_fill ? '<p class="small muted" style="margin:0 0 4px">If no caregiver accepts, our office will also try to arrange this visit. We can\'t guarantee a caregiver.</p>' : '') +
               (b.two_stage && b.team_from_words ? '<p class="small muted" style="margin:0">' + (b.picks ? 'We\'re asking the caregiver' + (b.picks > 1 ? 's' : '') + ' you picked first. ' : '') + 'Other caregivers on our team are asked from ' + esc(b.team_from_words) + '.</p>' : '')
         if (!b.start && b.status !== 'practice' && b.status !== 'not_filled') st += '<div class="small muted" style="margin-top:4px">The exact time shows here once a caregiver confirms.</div>'
         var c = S.confirmCancel === b.id, left = hoursUntil(b), req = isRequest(b) && b.method !== 'choose', late = !req && !b.no_caregiver && left < 24, started = left <= 0
         var tm = b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours))
         return '<div class="card"><div class="t" style="font-weight:700;color:var(--navy)">' + esc(day(b.date)) + ', ' + tm + '</div><div class="small muted">' + esc((b.tasks || []).join(', ')) + '</div><div>' + st + '</div>' +
-          (b.status === 'not_filled' || b.by_office ? ''
+          (b.status === 'not_filled' || b.by_office || b.declined ? ''
            : req && c ? '<div class="warn">Cancel this request? Nothing is scheduled yet, so there\'s no charge.</div>' +
                  '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '">Yes, cancel the request</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
            : req ? (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel request</button>' : '')
@@ -192,7 +197,7 @@
                  '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '"' + (late ? ' data-late="1"' : '') + '>' + (late ? 'Yes, cancel and charge ' + esc(hrs(LATE_HOURS())) : 'Yes, cancel it') + '</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
            : (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel this visit</button>' : '')) + '</div>'
       }).join('') + '</div>' : '<p class="muted">No visits booked in the app yet.</p>' + (h.can_book ? '<button class="btn" data-act="book">Request a visit</button>' : '')) +
-      '<p class="muted small">Each visit\'s notes are in AxisCare too. Have regular weekly visits and need to change one? ' + esc(callLine(phone() ? 'Call the office at' : 'Call')) + '.</p></div>'
+      '<p class="muted small">Each visit\'s notes are in AxisCare too. Need to change a regular weekly visit? ' + esc(callLine(phone() ? 'Call the office at' : 'Call')) + '.</p></div>'
   }
   V.choose = function () {
     var list = S.interested || [], b = (S.bookings || []).find(function (x) { return x.id === S.chooseFor }) || {}
@@ -292,8 +297,7 @@
       cells += '<button class="cal-d' + (on ? ' on' : '') + '" data-date="' + d + '"' + (ok ? '' : ' disabled') + ' aria-label="' + DAYL[dow(d)] + ', ' + MONL[mo] + ' ' + dd + (ok ? '' : ', not available') + '" aria-pressed="' + on + '">' + dd + '</button>'
     }
     return top('When should we come?', { back: 'home', backLabel: 'Home', step: 'Step 1 of ' + STEPS }) + '<div class="body">' + errBox() +
-      /* Samantha 2026-10-17: some families use the app ON ITS OWN, with no set schedule; this note must be true for them too */
-      '<div class="note">Pick a day for this visit. If ' + esc(S.home.client.name) + ' also has regular weekly visits, those stay just as they are.</div>' +
+      '<div class="note">' + esc(S.home.client.name) + '\'s regular weekly visits are already set. This is for an extra visit.</div>' +
       (firstBookable() ? '' : '<div class="warn">No days are open to book right now. Please call the office at ' + esc(phone()) + '.</div>') +
       '<div class="cal"><div class="cal-top"><button class="cal-nav" data-month="-1" aria-label="Previous month"' + (canPrev ? '' : ' disabled') + '>‹</button><b>' + MONL[mo] + ' ' + y + '</b>' +
         '<button class="cal-nav" data-month="1" aria-label="Next month"' + (canNext ? '' : ' disabled') + '>›</button></div>' +
@@ -324,7 +328,9 @@
       '<div class="small muted">Pick as many as you like</div><div class="tasks">' + S.home.tasks.map(function (t) {
         var on = b.tasks.indexOf(t) >= 0
         return '<button class="opt" data-task="' + esc(t) + '" aria-pressed="' + on + '"><span class="box">' + (on ? '<span style="color:#fff">' + ICON.check + '</span>' : '') + '</span>' + esc(t) + '</button>' }).join('') + '</div>' +
-      '<div><label class="q" for="note">Anything the caregiver should know?</label><textarea id="note" maxlength="1000" placeholder="For example: Mom would love help making soup, and a short walk if it\'s nice out.">' + esc(b.note) + '</textarea></div>' +
+      '<div><label class="q" for="note">Anything the caregiver should know?</label>' +
+        '<p class="small muted" style="margin:2px 0 6px">This note is for the caregiver. For emergencies call 911.' + (phone() ? ' For anything urgent, call us at ' + esc(phone()) + '.' : '') + '</p>' +
+        '<textarea id="note" maxlength="' + ((S.home && S.home.note_max) || 300) + '" placeholder="For example: Mom would love help making soup, and a short walk if it\'s nice out.">' + esc(b.note) + '</textarea></div>' +
       '</div><div class="foot"><button class="btn" data-act="to-book4"' + (b.tasks.length ? '' : ' disabled') + '>Next</button>' + (b.tasks.length ? '' : '<p class="center small muted">Pick at least one</p>') + '</div>'
   }
   /* Let me choose (her yes 2026-10-16): "Find someone for me" (recommended, fastest) or "Let me choose" (caregivers say
@@ -366,10 +372,17 @@
     var b = S.bk, h = bkHours(b), base = S.home.rate
     var extra = base && S.home.short_extra && h < (S.home.short_under_hours || 4) ? S.home.short_extra : 0, rate = base ? base + extra : null
     var whoTxt = b.method === 'choose' ? 'You choose, from the caregivers who are interested' : b.picks.length ? 'Asking ' + pickNames(b) + ' first, then others on our team if needed' : 'Whoever is available'
-    var key = b.date + ' ' + (b.mode === 'set' ? b.start : b.wFrom), w = S.when && S.when.key === key ? S.when : null
-    if (!w && !S.whenBusy) whenCheck(key, b.date, b.mode === 'set' ? b.start : b.wFrom)
+    var key = b.date + ' ' + (b.mode === 'set' ? b.start : b.wFrom) + '|' + (b.note || ''), w = S.when && S.when.key === key ? S.when : null
+    if (!w && !S.whenBusy) whenCheck(key, b.date, b.mode === 'set' ? b.start : b.wFrom, b.note || '')
+    /* Her choice 2026-10-17 ("Stop it at Send"): a note asking for care extra visits don't include is stopped here, before
+       anything is sent. The family changes or removes the note, or calls. Nothing goes to the office. */
+    var block = w && w.note_block
+    if (block) return top('Check and send', { back: 'book4', step: 'Step 5 of ' + STEPS }) + '<div class="body">' +
+      '<div class="warn" role="alert">' + esc(block) + '</div>' +
+      '<div class="tiles"><button class="btn" data-go="book3">Edit the note</button>' + (phone() ? '<a class="btn outline" href="' + telHref() + '">Call the office</a>' : '') + '</div>' +
+      '</div><div class="foot"><p class="center small muted">Nothing has been sent.</p></div>'
     var heads = !w ? '<p class="small muted">Checking when you\'ll hear back…</p>'
-      : w.ok ? '<div class="note"><b>This is a request.</b> We\'ll check caregiver availability. Your visit isn\'t scheduled until a caregiver accepts and we confirm it. You\'ll hear from us by <b>' + esc(w.answer_by_words) + '</b>' + (w.two_stage ? ' at the latest' : '') + '.</div>'
+      : w.ok ? '<div class="note"><b>This is a request.</b> We\'ll check caregiver availability. Your visit isn\'t scheduled until a caregiver accepts and we confirm it. You\'ll hear from us by <b>' + esc(w.answer_by_words) + '</b>' + (w.two_stage ? ' at the latest' : '') + '.' + (w.help ? '<br>' + esc(w.help) : '') + '</div>'
       : '<div class="warn">' + esc(w.error || 'That time is too soon to request in the app.') + '</div>'
     return top('Check and send', { back: 'book4', step: 'Step 5 of ' + STEPS }) + '<div class="body">' + errBox() + heads +
       '<div class="card" style="gap:0;padding:4px 16px">' +
@@ -387,6 +400,7 @@
   V.done = function () {
     var d = S.done
     return '<div class="body center" style="padding-top:40px;display:flex;flex-direction:column;gap:14px"><div class="big-check">' + ICON.bigcheck + '</div>' +
+      (d.emergency ? '<div class="warn" role="alert" style="text-align:left"><b>If this is an emergency, call 911 now.</b>' + (phone() ? ' For anything urgent, call us at <a href="' + telHref() + '">' + esc(phone()) + '</a>.' : '') + '</div>' : '') +
       '<h1>' + (d.status === 'practice' ? 'Got it (practice)' : d.choose ? 'Got it' : 'Request sent') + '</h1><p>' + esc(day(d.date)) + '<br><b>' + esc(d.when) + '</b></p>' +
       '<div class="card" style="text-align:left"><p>' + esc(d.message) + '</p></div></div>' +
       '<div class="foot"><button class="btn" data-act="home-reload">Back to home</button></div>'
@@ -494,14 +508,15 @@
     var choose = b.method === 'choose'
     call('book', Object.assign({ date: b.date, tasks: b.tasks, note: b.note, method: choose ? 'choose' : 'auto', who: !choose && b.picks.length ? 'preferred' : 'any', preferred: choose ? [] : b.picks }, when)).then(function (r) {
       S.busy = false
+      if (r.status === 422 && r.data.blocked) { S.when = Object.assign({}, S.when || {}, { note_block: r.data.error }); return render() }   // stopped at Send (the AI read it)
       if (r.status !== 200) { S.err = r.data.error || 'Something went wrong. Nothing was sent.'; S.when = null; return render() }
-      S.done = { date: b.date, when: whenLine(b), status: r.data.status, message: r.data.message, choose: choose }
+      S.done = { date: b.date, when: whenLine(b), status: r.data.status, message: r.data.message, choose: choose, emergency: r.data.emergency === true }
       S.bookings = null; S.view = 'done'; render()
     })
   }
-  function whenCheck(key, date, start) {
+  function whenCheck(key, date, start, note) {
     S.whenBusy = true
-    call('when', { date: date, start: start }).then(function (r) {
+    call('when', { date: date, start: start, note: note }).then(function (r) {
       S.whenBusy = false
       S.when = r.status === 200 ? Object.assign({ key: key }, r.data) : { key: key, ok: true, answer_by_words: 'the evening before' }
       if (S.view === 'book5') render()
