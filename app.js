@@ -72,12 +72,15 @@
   /* the visits booked in the app from today on, soonest first */
   function mineAhead() {
     var today = central().date
-    return (S.bookings || []).filter(function (b) { return b.status !== 'cancelled' && b.date >= today })
+    return (S.bookings || []).filter(function (b) { return (b.status !== 'cancelled' || b.by_office) && b.date >= today })
       .sort(function (a, b) { return (a.date + (a.start || a.window_start || '')).localeCompare(b.date + (b.start || b.window_start || '')) })
   }
   function whenOf(b) { return b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours)) }
   /* Release 1 (her approval 2026-10-17): it's a request until a caregiver accepts; never "booked" before that. */
-  function statusWords(b) { return b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)'
+  /* Release 2: AxisCare is the truth. A caregiver taken off, or a visit we removed, shows here as it is. */
+  function offWords(b) { return (b.off_caregiver ? b.off_caregiver + ' can\'t come on ' + day(b.date) + '. ' : '') + 'Our office is arranging another caregiver and will update you.' }
+  function officeCancelWords() { return 'This visit was cancelled by ' + (BR() ? BR().short : 'us') + '.' + (phone() ? ' Questions? Call ' + phone() + '.' : ' Questions? Please call the office.') }
+  function statusWords(b) { return b.by_office ? 'Cancelled by ' + (BR() ? BR().short : 'us') : b.no_caregiver ? 'Our office is arranging a caregiver' : b.status === 'placed' ? (b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') : b.status === 'practice' ? 'Practice (not on the schedule)'
     : b.status === 'not_filled' ? 'No caregiver was available' : 'Request sent, asking caregivers' + (b.answer_by_words ? '. You\'ll hear by ' + b.answer_by_words : '') }
   function isRequest(b) { return b.status !== 'placed' && b.status !== 'practice' && b.status !== 'not_filled' && !b.caregiver }
   function load(view) {
@@ -129,10 +132,10 @@
       S.me.clients.map(function (c) { return '<button class="row" data-pick="' + esc(c.id) + '"><span class="grow"><span class="t">' + esc(c.name) + '</span></span>' + ICON.chev + '</button>' }).join('') + '</div></div>'
   }
   V.home = function () {
-    var h = S.home, nx = mineAhead().filter(function (b) { return b.status !== 'not_filled' })[0], name = h.client.name
+    var h = S.home, nx = mineAhead().filter(function (b) { return b.status !== 'not_filled' && !b.by_office })[0], name = h.client.name
     var waiting = h.waiting.filter(function (w) { return w.status !== 'practice' })
     return top('Visits for ' + name, { tall: true, help: true, sub: 'Hello, ' + first(S.me && S.me.name) }) +
-      (nx ? '<button class="card next" data-go="visits">' + avatar(nx.caregiver ? { first_name: first(nx.caregiver) } : null) +
+      (nx ? '<button class="card next" data-go="visits">' + avatar(nx.caregiver && !nx.no_caregiver ? { first_name: first(nx.caregiver) } : null) +
             '<span style="display:flex;flex-direction:column;gap:2px;flex:1"><span class="label">' + (nx && isRequest(nx) ? 'Your request in the app' : 'Next visit booked in the app') + '</span><span class="t">' + esc(day(nx.date)) + '</span><span>' + whenOf(nx) + '</span>' +
             '<span class="small muted">' + esc(statusWords(nx)) + '</span></span>' + ICON.chev + '</button>'
           : '<button class="card next" data-go="visits"><span style="flex:1"><span class="label">Visits booked in the app</span><br><span class="t">Nothing requested yet</span><br><span class="small muted">Your regular schedule is in AxisCare.</span></span>' + ICON.chev + '</button>') +
@@ -162,7 +165,9 @@
       '<div class="card"><p style="margin:0 0 10px"><b>These are only the visits and requests made in this app.</b> If you also have regular visits with ' + esc(BR() ? BR().short : 'us') + ', see your full schedule in AxisCare.</p>' +
         '<a class="btn outline" href="' + esc(AXIS) + '" target="_blank" rel="noopener">See the full schedule in AxisCare</a></div>' +
       (mine.length ? '<div class="list">' + mine.map(function (b) {
-        var st = b.status === 'placed' ? '<span class="pill ok">' + esc(b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') + '</span>'
+        var st = b.by_office ? '<span class="pill wait">' + esc(statusWords(b)) + '</span><p class="small" style="margin:6px 0">' + esc(officeCancelWords()) + '</p>'
+          : b.no_caregiver ? '<span class="pill wait">Our office is arranging a caregiver</span><p class="small" style="margin:6px 0">' + esc(offWords(b)) + '</p>'
+          : b.status === 'placed' ? '<span class="pill ok">' + esc(b.caregiver ? first(b.caregiver) + ' is coming' : 'Confirmed') + '</span>'
           : b.status === 'practice' ? '<span class="pill wait">Practice (not on the schedule)</span>'
           : b.method === 'choose' ? '<span class="pill wait">You choose · ' + (b.interested ? b.interested + ' interested' : 'asking caregivers') + '</span>' +
               '<div class="tiles" style="margin-top:8px">' + (b.interested ? '<button class="btn" data-choose-open="' + esc(b.id) + '">See who\'s interested</button>' : '') + '<button class="btn outline" data-choose-auto="' + esc(b.id) + '">Find someone for me instead</button></div>'
@@ -172,10 +177,10 @@
               (b.answer_by_words ? ' You\'ll hear from us by ' + esc(b.answer_by_words) + '.' : '') + '</p>' +
               (b.two_stage && b.team_from_words ? '<p class="small muted" style="margin:0">' + (b.picks ? 'We\'re asking the caregiver' + (b.picks > 1 ? 's' : '') + ' you picked first. ' : '') + 'Other caregivers on our team are asked from ' + esc(b.team_from_words) + '.</p>' : '')
         if (!b.start && b.status !== 'practice' && b.status !== 'not_filled') st += '<div class="small muted" style="margin-top:4px">The exact time shows here once a caregiver confirms.</div>'
-        var c = S.confirmCancel === b.id, left = hoursUntil(b), req = isRequest(b) && b.method !== 'choose', late = !req && left < 24, started = left <= 0
+        var c = S.confirmCancel === b.id, left = hoursUntil(b), req = isRequest(b) && b.method !== 'choose', late = !req && !b.no_caregiver && left < 24, started = left <= 0
         var tm = b.start ? esc(t12(b.start)) + ' to ' + esc(t12(b.end)) : 'Anytime ' + esc(t12(b.window_start)) + ' to ' + esc(t12(b.window_end)) + ', ' + esc(hrs(b.hours))
         return '<div class="card"><div class="t" style="font-weight:700;color:var(--navy)">' + esc(day(b.date)) + ', ' + tm + '</div><div class="small muted">' + esc((b.tasks || []).join(', ')) + '</div><div>' + st + '</div>' +
-          (b.status === 'not_filled' ? ''
+          (b.status === 'not_filled' || b.by_office ? ''
            : req && c ? '<div class="warn">Cancel this request? Nothing is scheduled yet, so there\'s no charge.</div>' +
                  '<div class="tiles"><button class="btn" data-cancel-yes="' + esc(b.id) + '">Yes, cancel the request</button><button class="btn outline" data-cancel-no="1">Keep it</button></div>'
            : req ? (S.home.can_book ? '<button class="btn quiet" data-cancel="' + esc(b.id) + '">Cancel request</button>' : '')
