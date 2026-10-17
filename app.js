@@ -315,14 +315,22 @@
       '<p class="small muted">We\'ll ask caregivers who know ' + esc(S.home.client.name) + ' first, then others on our team. You\'ll see who\'s interested here and choose. If you haven\'t picked by the day before, we\'ll pick for you.</p>' +
       '</div><div class="foot"><button class="btn" data-go="book5">Review</button></div>'
     return top('Who would you like to come?', { back: 'book3', step: 'Step 4 of ' + STEPS }) + '<div class="body">' + errBox() + methods +
-      (list.length ? '<p class="small muted">Pick one or more. We ask them first, and the first one who says yes is yours.</p>' : '') +
+      (list.length ? '<p class="small muted">Pick one or more, or Whoever is available.</p>' : '') +
       '<div class="list">' + list.map(function (c) {
         var on = b.picks.indexOf(c.axiscare_id) >= 0
         return '<button class="opt" data-pickcg="' + esc(c.axiscare_id) + '" aria-pressed="' + on + '">' + avatar(c) + '<span style="flex:1"><b style="color:var(--navy)">' + esc(c.name) + '</b><br><span class="small muted">' + c.visits_together + ' visit' + (c.visits_together === 1 ? '' : 's') + ' together</span></span><span class="box">' + (on ? '<span style="color:#fff">' + ICON.check + '</span>' : '') + '</span></button>'
       }).join('') +
         '<button class="opt" data-pickcg="any" aria-pressed="' + b.any + '"><div class="avatar" aria-hidden="true">?</div><span style="flex:1"><b style="color:var(--navy)">Whoever is available</b><br><span class="small muted">The quickest way to get a yes</span></span><span class="box">' + (b.any ? '<span style="color:#fff">' + ICON.check + '</span>' : '') + '</span></button></div>' +
-      '<p class="small muted">If none of your picks can make it, we offer the visit to other caregivers on our team so it still happens.</p>' +
+      askingWords(b) +
       '</div><div class="foot"><button class="btn" data-go="book5"' + (b.picks.length || b.any ? '' : ' disabled') + '>Review</button></div>'
+  }
+  /* Her ask 2026-10-16: say plainly how asking works (it is how family-offer runs: picks first; the team as soon as they
+     all say no, or after 4 hours without an answer, sooner when the visit is close; first yes wins). */
+  function askingWords(b) {
+    if (!b.picks.length) return '<p class="small muted">We ask caregivers on our team, starting with those who know ' + esc(S.home.client.name) + '. The first one who says yes is yours.</p>'
+    var who = pickNames(b), one = b.picks.length === 1
+    return '<div class="note"><b>How we ask</b><br>We\'ll ask ' + esc(who) + ' first. If ' + (one ? esc(who) + ' can\'t' : 'none of them can') + ', we ask others on our team right away. If ' +
+      (one ? esc(who) + ' hasn\'t' : 'nobody has') + ' answered in 4 hours (sooner if the visit is soon), we ask others too. The first one who says yes is yours.</div>'
   }
   function pickNames(b) {
     var n = b.picks.map(function (id) { var c = (S.cgs || []).find(function (x) { return x.axiscare_id === id }); return c ? c.first_name : null }).filter(Boolean)
