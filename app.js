@@ -151,6 +151,7 @@
         '<button class="tile" data-go="visits">' + ICON.list + 'Booked in the app</button>' +
         '<button class="tile" data-go="account">' + ICON.gear + 'Account</button>' +
       '</div>' +
+      (h.cg_view ? '<button class="card next" data-go="cgsee"><span style="flex:1"><span class="label">Your profile for caregivers</span><br><span class="t">What caregivers see about ' + esc(first(name)) + '</span><br><span class="small muted">See it, or suggest a change</span></span>' + ICON.chev + '</button>' : '') +
       (h.can_book ? '' : '<div class="note">Your login can see visits. To request visits, ask the office to turn on booking for you.</div>') +
       '</div><div class="foot">' + (phone() ? '<a class="btn outline" href="' + telHref() + '">Call the office</a><p class="center muted small">' + esc(phone()) + ' · a real person answers, weekdays 8 AM to 6 PM</p>' : '<p class="center muted small">Questions? Please call the office.</p>') + '</div>'
   }
@@ -162,6 +163,58 @@
     var days = Math.round((Date.parse(b.date + 'T12:00:00Z') - Date.parse(c.date + 'T12:00:00Z')) / 86400000)
     return (days * 1440 + toMin(s) - c.min) / 60 }
   function cgPhoto(id) { var c = (S.cgs || []).find(function (x) { return x.axiscare_id === String(id) }); return c ? c.photo : null }
+  /* WHAT CAREGIVERS SEE (her ask 2026-10-25: "the family who is using the booking app can see what the caregiver sees in a
+     preview as well"). The same office-approved profile a caregiver sees when we offer them a visit; the Hub sends it only
+     while app_profile_live is on (S.home.cg_view). The family can suggest a change; the office approves before anything
+     changes. Our own illustrations, never a photo (the same scenes as the caregiver's page). */
+  var SCENES = {
+    garden: '<svg viewBox="0 0 340 150" aria-hidden="true"><rect width="340" height="150" fill="#EAF4F6"/><circle cx="286" cy="36" r="20" fill="#F0A63A" opacity=".85"/><path d="M0 118 Q90 94 170 112 T340 104 V150 H0Z" fill="#8FD1C7"/><path d="M0 134 Q100 114 190 128 T340 122 V150 H0Z" fill="#1F7A8C"/><g fill="#14606F"><rect x="74" y="92" width="4" height="30"/><rect x="104" y="86" width="4" height="36"/><rect x="134" y="96" width="4" height="26"/></g><circle cx="76" cy="88" r="10" fill="#F0A63A"/><circle cx="106" cy="80" r="12" fill="#E8C988"/><circle cx="136" cy="92" r="9" fill="#F0A63A"/><path d="M210 120 q20-40 40 0z" fill="#14606F"/><circle cx="230" cy="96" r="7" fill="#fff"/></svg>',
+    coffee: '<svg viewBox="0 0 340 150" aria-hidden="true"><rect width="340" height="150" fill="#fbf1df"/><rect x="0" y="112" width="340" height="38" fill="#E8C988"/><rect x="120" y="66" width="70" height="50" rx="10" fill="#fff"/><path d="M190 76 q24 0 24 16 t-24 16" fill="none" stroke="#fff" stroke-width="8"/><rect x="130" y="70" width="50" height="10" rx="4" fill="#C17A12" opacity=".7"/><path d="M140 52 q-8-12 0-22 M156 54 q-8-12 0-22 M172 52 q-8-12 0-22" stroke="#8FD1C7" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="268" cy="96" r="20" fill="#1F7A8C" opacity=".25"/><circle cx="62" cy="40" r="16" fill="#F0A63A" opacity=".7"/></svg>',
+    porch: '<svg viewBox="0 0 340 150" aria-hidden="true"><rect width="340" height="150" fill="#EAF4F6"/><circle cx="276" cy="38" r="18" fill="#F0A63A" opacity=".85"/><path d="M0 126 Q120 108 240 122 T340 118 V150 H0Z" fill="#8FD1C7"/><rect x="96" y="66" width="104" height="60" rx="4" fill="#fff"/><path d="M84 70 L148 30 L212 70Z" fill="#0D365F"/><rect x="138" y="90" width="20" height="36" rx="2" fill="#C17A12"/><rect x="108" y="80" width="20" height="18" rx="2" fill="#8FD1C7"/><rect x="168" y="80" width="20" height="18" rx="2" fill="#8FD1C7"/><rect x="226" y="104" width="34" height="6" rx="3" fill="#14606F"/><rect x="230" y="110" width="4" height="14" fill="#14606F"/><rect x="252" y="110" width="4" height="14" fill="#14606F"/></svg>',
+    sunrise: '<svg viewBox="0 0 340 150" aria-hidden="true"><rect width="340" height="150" fill="#fbf1df"/><circle cx="170" cy="112" r="44" fill="#F0A63A"/><path d="M0 112 H340 V150 H0Z" fill="#1F7A8C"/><path d="M0 124 Q90 110 170 122 T340 118 V150 H0Z" fill="#14606F"/><g stroke="#E8C988" stroke-width="4" stroke-linecap="round"><path d="M170 52 v-16 M120 70 l-12-12 M220 70 l12-12 M98 104 h-16 M242 104 h16"/></g></svg>'
+  }
+  
+  function cgSee(b) {
+    var v = S.home.cg_view, n = esc(first(S.home.client.name)), good = (v.home || []).slice(), skills = [v.level ? 'Level ' + v.level : ''].concat(v.needs || []).filter(Boolean)
+    return '<div class="cgsee">' + '<div class="cgsee-hero">' + (SCENES[v.scene] || SCENES.porch) + '</div>' +
+      '<h2>Meet ' + n + '</h2>' +
+      (v.about ? '<p>' + esc(v.about) + '</p>' : '<p class="small muted">We haven\'t finished ' + n + '\'s profile yet, so caregivers see the basics: first name, town, the day and time, and what you ask for.</p>') +
+      (v.enjoys && v.enjoys.length ? '<div class="cgsee-k">' + n + ' enjoys</div><div class="cgsee-chips">' + v.enjoys.map(function (x) { return '<span>' + esc(x) + '</span>' }).join('') + '</div>' : '') +
+      '<div class="cgsee-rows">' +
+        '<div class="sum"><span class="muted">Who</span><span class="v">' + n + (v.town ? ', ' + esc(v.town) : '') + '</span></div>' +
+        (b ? '<div class="sum"><span class="muted">When</span><span class="v">' + esc(day(b.date)) + '<br>' + esc(whenLine(b)) + '</span></div>' +
+             '<div class="sum"><span class="muted">Help with</span><span class="v">' + esc(b.tasks.join(', ')) + '</span></div>' : '') +
+        (skills.length ? '<div class="sum"><span class="muted">Skills needed</span><span class="v">' + skills.map(esc).join(', ') + '</span></div>' : '') +
+        (good.length ? '<div class="sum"><span class="muted">Good to know</span><span class="v">' + good.map(esc).join('. ') + '.</span></div>' : '') +
+        (b && b.note ? '<div class="sum"><span class="muted">The family says</span><span class="v">' + esc(b.note) + '</span></div>' : '') +
+      '</div><p class="small muted">Caregivers don\'t see ' + n + '\'s last name or address here. A caregiver gets the address in AxisCare once they\'re on the visit.</p></div>'
+  }
+  V.cgsee = function () {
+    var n = first(S.home.client.name)
+    return top('What caregivers see', { back: 'home', backLabel: 'Home', sub: 'About ' + n }) + '<div class="body">' + errBox() +
+      '<p class="small muted">When you request a visit, caregivers see this, plus the day, time and what you ask for. Our office writes and approves it.</p>' + cgSee(null) +
+      (S.home.can_suggest ? '<button class="btn outline" data-go="suggest">Suggest a change</button>' : '') + '</div>'
+  }
+  V.suggest = function () {
+    var n = first(S.home.client.name)
+    if (S.suggestDone) return top('Thank you', { back: 'cgsee', backLabel: 'Back' }) + '<div class="body"><div class="card"><p>' + esc(S.suggestDone) + '</p></div></div>' +
+      '<div class="foot"><button class="btn" data-act="suggest-home">Back to home</button></div>'
+    return top('Suggest a change', { back: 'cgsee', backLabel: 'Back', sub: 'What caregivers see about ' + n }) + '<div class="body">' + errBox() +
+      '<p>Tell us what to add or change, like what ' + esc(n) + ' likes to be called, favorite things to talk about, or something that\'s no longer true.</p>' +
+      '<textarea id="sugg" rows="5" maxlength="500" placeholder="Your suggestion">' + esc(S.suggestText || '') + '</textarea>' +
+      '<p class="small muted">Our office looks at it before anything changes. Please leave out health details; caregivers get those from the care plan.</p></div>' +
+      '<div class="foot"><button class="btn" data-act="suggest-send"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Sending…' : 'Send suggestion') + '</button></div>'
+  }
+  function sendSuggestion() {
+    var el = document.getElementById('sugg'); S.suggestText = el ? el.value : ''
+    if (!S.suggestText.trim()) { S.err = 'Please write what you\'d like changed.'; return render() }
+    S.busy = true; S.err = ''; render()
+    return call('suggest_profile', { text: S.suggestText }).then(function (r) {
+      S.busy = false
+      if (r.status === 200) { S.suggestDone = r.data.message; S.suggestText = '' } else S.err = (r.data && r.data.error) || 'It didn\'t send. Please try again.'
+      render()
+    })
+  }
   V.visits = function () {
     /* Her note 2026-10-16: this screen is ONLY the visits booked in the app, and says so; regular visits are in AxisCare. */
     var h = S.home, mine = mineAhead()
@@ -393,6 +446,7 @@
       '<div class="panel">' + (rate ? '<div style="display:flex;justify-content:space-between;align-items:baseline"><span>Estimated · ' + hrs(h) + ' × $' + money(rate) + '</span><span style="font-family:var(--serif);font-size:1.5em;font-weight:600;color:var(--navy)">$' + money(h * rate) + '</span></div>' +
           (extra ? '<p class="small muted">Visits under ' + (S.home.short_under_hours || 4) + ' hours are $' + money(extra) + ' more an hour, to cover drive time between visits.</p>' : '') : '') +
         '<p class="small muted">Nothing is charged today. The final amount, for the time the caregiver is actually there, shows on your weekly invoice with the other visits.</p></div>' +
+      (S.home.cg_view ? '<details class="cgsee-d"><summary>What the caregiver will see</summary>' + cgSee(b) + '</details>' : '') +
       '<p class="small">You can cancel a request any time before a caregiver accepts, at no charge. Once it\'s confirmed: no fee to cancel up to 24 hours before. After that you can still cancel in the app, and 2 hours are charged.</p>' +
       '</div><div class="foot">' + (w && !w.ok ? '<button class="btn" data-go="book2">Pick a later time</button>'
         : '<button class="btn" data-act="confirm"' + (S.busy || !w ? ' disabled' : '') + '>' + (S.busy ? 'Sending…' : 'Send request') + '</button>') + '</div>'
@@ -425,7 +479,7 @@
   app.addEventListener('click', function (e) {
     var el = e.target.closest('button, a'); if (!el) return
     var ds = el.dataset
-    if (ds.go) return go(ds.go)
+    if (ds.go) { if (ds.go === 'suggest') S.suggestDone = null; return go(ds.go) }
     if (ds.pick) { S.client = ds.pick; S.cgs = null; S.bookings = null; return load('home') }
     if (ds.cg) { S.cg = (S.cgs || []).find(function (x) { return x.axiscare_id === ds.cg }); return go('caregiver') }
     if (ds.date) { S.bk.date = ds.date; fixTimes(); return render() }
@@ -455,6 +509,8 @@
     if (a === 'book-with') { newBooking(ds.id); return go('book1') }
     if (a === 'to-book4') { keepNote(); return go('book4') }
     if (a === 'confirm') return confirm()
+    if (a === 'suggest-send') return sendSuggestion()
+    if (a === 'suggest-home') { S.suggestDone = null; return go('home') }
     if (a === 'home-reload') { S.bookings = null; return load('home') }
     if (a === 'signout') { S.me = null; S.client = null; S.home = null; S.cgs = null; S.sent = false; if (sb) sb.auth.signOut(); S.view = 'signin'; return render() }
   })

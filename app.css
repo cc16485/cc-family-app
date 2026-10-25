@@ -131,3 +131,18 @@ video { width: 100%; border-radius: 14px; background: #000; }
 
 /* the app's name above "Sign in" (renamed 2026-10-17) */
 .app-name{margin:0 0 4px;font-weight:600;color:var(--teal-deep);font-size:15px}
+
+/* What caregivers see (2026-10-25): the same profile a caregiver sees on a visit offer */
+.cgsee { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.cgsee-hero { border-radius: 14px; overflow: hidden; background: var(--teal-pale); }
+.cgsee-hero svg { display: block; width: 100%; height: auto; }
+.cgsee h2 { font-family: var(--serif); color: var(--navy); margin: 6px 0 0; font-size: 1.35em; }
+.cgsee p { margin: 4px 0; }
+.cgsee-k { font-size: .72em; color: var(--muted, #55677a); text-transform: uppercase; letter-spacing: .07em; font-weight: 800; margin-top: 6px; }
+.cgsee-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.cgsee-chips span { background: #fbf1df; color: #8a5a00; border-radius: 999px; padding: 4px 11px; font-size: .88em; font-weight: 700; }
+.cgsee-rows { margin-top: 4px; }
+details.cgsee-d { border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; background: var(--panel); }
+details.cgsee-d summary { font-weight: 700; color: var(--navy); cursor: pointer; min-height: 32px; }
+details.cgsee-d[open] summary { margin-bottom: 10px; }
+#sugg { width: 100%; font: inherit; padding: 12px; border: 2px solid var(--border); border-radius: 12px; box-sizing: border-box; }
