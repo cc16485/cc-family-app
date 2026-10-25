@@ -151,7 +151,7 @@
         '<button class="tile" data-go="visits">' + ICON.list + 'Booked in the app</button>' +
         '<button class="tile" data-go="account">' + ICON.gear + 'Account</button>' +
       '</div>' +
-      (h.cg_view ? '<button class="card next" data-go="cgsee"><span style="flex:1"><span class="label">Your profile for caregivers</span><br><span class="t">What caregivers see about ' + esc(first(name)) + '</span><br><span class="small muted">See it, or suggest a change</span></span>' + ICON.chev + '</button>' : '') +
+      (h.cg_view ? '<button class="card next" data-go="cgsee"><span style="flex:1"><span class="label">Your profile for caregivers</span><br><span class="t">What caregivers see about ' + esc(first(name)) + '</span><br><span class="small muted">' + (h.family_profile ? (h.cg_view.source === 'family' ? 'You wrote it. See it or change it' : 'Write it so caregivers get to know ' + esc(first(name))) : 'See it, or suggest a change') + '</span></span>' + ICON.chev + '</button>' : '') +
       (h.can_book ? '' : '<div class="note">Your login can see visits. To request visits, ask the office to turn on booking for you.</div>') +
       '</div><div class="foot">' + (phone() ? '<a class="btn outline" href="' + telHref() + '">Call the office</a><p class="center muted small">' + esc(phone()) + ' · a real person answers, weekdays 8 AM to 6 PM</p>' : '<p class="center muted small">Questions? Please call the office.</p>') + '</div>'
   }
@@ -178,7 +178,8 @@
     var v = S.home.cg_view, n = esc(first(S.home.client.name)), good = (v.home || []).slice(), skills = [v.level ? 'Level ' + v.level : ''].concat(v.needs || []).filter(Boolean)
     return '<div class="cgsee">' + '<div class="cgsee-hero">' + (SCENES[v.scene] || SCENES.porch) + '</div>' +
       '<h2>Meet ' + n + '</h2>' +
-      (v.about ? '<p>' + esc(v.about) + '</p>' : '<p class="small muted">We haven\'t finished ' + n + '\'s profile yet, so caregivers see the basics: first name, town, the day and time, and what you ask for.</p>') +
+      (v.about ? '<p>' + esc(v.about) + '</p>' : v.basics ? '<p class="small muted">' + (S.home.family_profile ? 'Nobody has written ' + n + '\'s profile yet' : 'We haven\'t finished ' + n + '\'s profile yet') + ', so caregivers see the basics: first name, town, the day and time, and what you ask for.</p>' : '') +
+      (v.life || []).map(function (x) { return '<div class="cgsee-k">' + esc(x.label) + '</div><p>' + esc(x.text) + '</p>' }).join('') +
       (v.enjoys && v.enjoys.length ? '<div class="cgsee-k">' + n + ' enjoys</div><div class="cgsee-chips">' + v.enjoys.map(function (x) { return '<span>' + esc(x) + '</span>' }).join('') + '</div>' : '') +
       '<div class="cgsee-rows">' +
         '<div class="sum"><span class="muted">Who</span><span class="v">' + n + (v.town ? ', ' + esc(v.town) : '') + '</span></div>' +
@@ -190,10 +191,78 @@
       '</div><p class="small muted">Caregivers don\'t see ' + n + '\'s last name or address here. A caregiver gets the address in AxisCare once they\'re on the visit.</p></div>'
   }
   V.cgsee = function () {
-    var n = first(S.home.client.name)
+    var n = first(S.home.client.name), fp = S.home.family_profile
     return top('What caregivers see', { back: 'home', backLabel: 'Home', sub: 'About ' + n }) + '<div class="body">' + errBox() +
-      '<p class="small muted">When you request a visit, caregivers see this, plus the day, time and what you ask for. Our office writes and approves it.</p>' + cgSee(null) +
+      (S.profileMsg ? '<div class="note" role="status">' + esc(S.profileMsg) + '</div>' : '') +
+      '<p class="small muted">When you request a visit, caregivers see this, plus the day, time and what you ask for. ' + intro() + '</p>' + cgSee(null) +
+      /* 2026-10-25: the optional photo, seen only by the caregiver confirmed for a visit */
+      (fp && fp.photo_on ? '<div class="card pf-photo">' + (fp.photo_url ? '<img src="' + esc(fp.photo_url) + '" alt="Photo of ' + esc(n) + '">' : '') +
+        '<div><b>' + (fp.photo_url ? 'Photo of ' + esc(n) : 'Add a photo of ' + esc(n) + ' (optional)') + '</b><p class="small muted">' + (fp.photo_url ? 'Only the caregiver confirmed for a visit sees it, so they know who they\'re meeting.' : 'It helps the caregiver confirmed for a visit know who they\'re meeting. Caregivers who are only offered a visit never see it.') + '</p>' +
+        (fp.can_edit ? '<button class="btn outline" data-go="photo">' + (fp.photo_url ? 'Change photo' : 'Add a photo') + '</button>' + (fp.photo_url ? '<button class="btn quiet" data-act="photo-remove">Remove photo</button>' : '') : '') + '</div></div>' : '') +
+      (fp && fp.can_edit ? '<button class="btn" data-go="profile">' + (S.home.cg_view.source === 'family' ? 'Change ' : 'Write ') + esc(n) + '\'s profile</button>' : '') +
+      (fp && !fp.can_edit ? '<p class="small muted">Your login can see visits. Ask the office to turn on booking for you to write the profile.</p>' : '') +
       (S.home.can_suggest ? '<button class="btn outline" data-go="suggest">Suggest a change</button>' : '') + '</div>'
+    function intro() { return !fp ? 'Our office writes and approves it.' : S.home.cg_view.source === 'family' ? 'You wrote it, and you can change it anytime.' + (fp.updated_by ? ' Last changed by ' + esc(fp.updated_by) + '.' : '') : 'Until you write your own, caregivers see what our office wrote.' }
+  }
+  /* THE FAMILY WRITES THE PROFILE (her rule 2026-10-25: "the family who signs up for the app has access to make their profile").
+     It goes to caregivers straight away after the Hub's checks (no address, phone, money or health details); nothing waits for
+     the office. It is the family's own: changes the office makes to its shift profile never change it. */
+  V.profile = function () {
+    var fp = S.home.family_profile, n = first(S.home.client.name), d = S.pf || fp, L = fp.limits || { about: 400, answer: 300, enjoys: 6 }
+    var box = function (k, label, max, rows, ph) { return '<label class="pf-l" for="pf_' + k + '">' + esc(label) + '</label><textarea id="pf_' + k + '" rows="' + rows + '" maxlength="' + max + '"' +
+      (S.pfField === k ? ' aria-invalid="true" class="pf-bad"' : '') + ' placeholder="' + esc(ph) + '">' + esc(d[k] || '') + '</textarea>' }
+    return top((S.home.cg_view.source === 'family' ? 'Change ' : 'Write ') + n + '\'s profile', { back: 'cgsee', backLabel: 'Back', sub: 'For caregivers' }) + '<div class="body">' + errBox() +
+      '<p>Help caregivers get to know ' + esc(n) + '. Write as much or as little as you like.</p>' +
+      box('about', 'A few words about ' + n, L.about, 3, 'For example: ' + n + ' taught third grade for 30 years and still loves a good crossword.') +
+      (fp.questions || []).map(function (q) { return box(q.key, q.label, L.answer, 2, '') }).join('') +
+      '<label class="pf-l" for="pf_enjoys">Things ' + esc(n) + ' enjoys (up to ' + L.enjoys + ', separated by commas)</label><input id="pf_enjoys" maxlength="200"' + (S.pfField === 'enjoys' ? ' aria-invalid="true" class="pf-bad"' : '') + ' value="' + esc((d.enjoys || []).join(', ')) + '" placeholder="Gardening, Sweet tea, Old movies">' +
+      '<p class="small muted">Please leave out health details, addresses, phone numbers and money. Caregivers get care needs from the care plan. It shows to caregivers as soon as you save.</p></div>' +
+      '<div class="foot"><button class="btn" data-act="profile-save"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : 'Save') + '</button></div>'
+  }
+  function readProfile() {
+    var g = function (k) { var el = document.getElementById('pf_' + k); return el ? el.value : '' }
+    return { about: g('about'), work: g('work'), talk: g('talk'), little: g('little'), enjoys: g('enjoys').split(',').map(function (x) { return x.trim() }).filter(Boolean) }
+  }
+  function saveProfile() {
+    S.pf = readProfile(); S.busy = true; S.err = ''; S.pfField = null; render()
+    return call('save_profile', { profile: S.pf }).then(function (r) {
+      S.busy = false
+      if (r.status === 200) {
+        if (r.data.cg_view) { S.home.cg_view = r.data.cg_view; S.home.family_profile = r.data.family_profile }
+        S.pf = null; S.profileMsg = r.data.message || 'Saved.'; S.view = 'cgsee'; return render()
+      }
+      S.err = (r.data && r.data.error) || "It didn't save. Please try again."; S.pfField = r.data && r.data.field; render()
+    })
+  }
+  V.photo = function () {
+    var fp = S.home.family_profile, n = first(S.home.client.name)
+    return top((fp.photo_url ? 'Change ' : 'Add ') + n + '\'s photo', { back: 'cgsee', backLabel: 'Back', sub: 'Optional' }) + '<div class="body">' + errBox() +
+      '<p>Pick a recent photo that shows just ' + esc(n) + '\'s face. We\'ll trim it to a square.</p>' +
+      '<label class="btn outline" for="ph_file" style="text-align:center">' + (S.photo ? 'Pick a different photo' : 'Pick a photo') + '</label><input id="ph_file" type="file" accept="image/*" style="display:none">' +
+      (S.photo ? '<div class="center"><img class="pf-crop" src="' + S.photo + '" alt="Your photo, trimmed"></div>' : '') +
+      '<label class="pf-check"><input type="checkbox" id="ph_ok"' + (S.photoOk ? ' checked' : '') + '> ' + esc(fp.photo_consent_words || 'I have permission to share this photo with caregivers.') + '</label>' +
+      '<p class="small muted">Only the caregiver confirmed for a visit sees it. Please no other people, mail, house numbers or medical equipment in the picture. You can remove it anytime.</p></div>' +
+      '<div class="foot"><button class="btn" data-act="photo-save"' + (S.busy || !S.photo ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : 'Save photo') + '</button></div>'
+  }
+  /* trim to the middle square, 512 by 512, as a JPEG (also turns an iPhone HEIC into a JPEG once the browser has shown it) */
+  function pickPhoto(file) {
+    if (!file) return
+    S.err = ''; var url = URL.createObjectURL(file), img = new Image()
+    img.onload = function () {
+      var side = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas'); c.width = c.height = 512
+      c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 512, 512)
+      URL.revokeObjectURL(url); S.photo = c.toDataURL('image/jpeg', 0.85); render()
+    }
+    img.onerror = function () { URL.revokeObjectURL(url); S.err = 'That file isn\'t a photo we can use. Please pick another.'; render() }
+    img.src = url
+  }
+  function photoCall(action, extra) {
+    S.busy = true; S.err = ''; render()
+    return call(action, extra).then(function (r) {
+      S.busy = false
+      if (r.status === 200) { if (r.data.cg_view) { S.home.cg_view = r.data.cg_view; S.home.family_profile = r.data.family_profile } S.photo = null; S.photoOk = false; S.profileMsg = r.data.message; S.view = 'cgsee'; return render() }
+      S.err = (r.data && r.data.error) || "It didn't save. Please try again."; render()
+    })
   }
   V.suggest = function () {
     var n = first(S.home.client.name)
@@ -479,7 +548,7 @@
   app.addEventListener('click', function (e) {
     var el = e.target.closest('button, a'); if (!el) return
     var ds = el.dataset
-    if (ds.go) { if (ds.go === 'suggest') S.suggestDone = null; return go(ds.go) }
+    if (ds.go) { if (ds.go === 'suggest') S.suggestDone = null; if (ds.go === 'profile') { S.pf = null; S.pfField = null } if (ds.go === 'photo') { S.photo = null; S.photoOk = false } S.confirmPhoto = false; if (ds.go !== 'cgsee') S.profileMsg = ''; return go(ds.go) }
     if (ds.pick) { S.client = ds.pick; S.cgs = null; S.bookings = null; return load('home') }
     if (ds.cg) { S.cg = (S.cgs || []).find(function (x) { return x.axiscare_id === ds.cg }); return go('caregiver') }
     if (ds.date) { S.bk.date = ds.date; fixTimes(); return render() }
@@ -510,11 +579,16 @@
     if (a === 'to-book4') { keepNote(); return go('book4') }
     if (a === 'confirm') return confirm()
     if (a === 'suggest-send') return sendSuggestion()
+    if (a === 'profile-save') return saveProfile()
+    if (a === 'photo-save') { S.photoOk = !!(document.getElementById('ph_ok') || {}).checked; if (!S.photoOk) { S.err = 'Please tick that you have permission to share this photo.'; return render() } return photoCall('save_photo', { photo: S.photo, consent: true }) }
+    if (a === 'photo-remove') { if (S.confirmPhoto) { S.confirmPhoto = false; return photoCall('remove_photo') } S.confirmPhoto = true; S.profileMsg = 'Tap Remove photo again to remove it.'; return render() }
     if (a === 'suggest-home') { S.suggestDone = null; return go('home') }
     if (a === 'home-reload') { S.bookings = null; return load('home') }
     if (a === 'signout') { S.me = null; S.client = null; S.home = null; S.cgs = null; S.sent = false; if (sb) sb.auth.signOut(); S.view = 'signin'; return render() }
   })
   app.addEventListener('change', function (e) {
+    if (e.target.id === 'ph_file') return pickPhoto(e.target.files && e.target.files[0])
+    if (e.target.id === 'ph_ok') { S.photoOk = e.target.checked; return }
     var k = e.target.dataset && e.target.dataset.time
     if (!k || !S.bk) return
     S.bk[k] = e.target.value; fixTimes(); render()

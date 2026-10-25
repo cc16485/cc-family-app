@@ -146,3 +146,12 @@ details.cgsee-d { border: 1px solid var(--border); border-radius: 16px; padding:
 details.cgsee-d summary { font-weight: 700; color: var(--navy); cursor: pointer; min-height: 32px; }
 details.cgsee-d[open] summary { margin-bottom: 10px; }
 #sugg { width: 100%; font: inherit; padding: 12px; border: 2px solid var(--border); border-radius: 12px; box-sizing: border-box; }
+.pf-l { display: block; font-weight: 600; color: var(--navy); margin: 12px 0 4px; }
+.body textarea[id^="pf_"], #pf_enjoys { width: 100%; font: inherit; padding: 12px; border: 2px solid var(--border); border-radius: 12px; box-sizing: border-box; background: var(--card); }
+.pf-bad { border-color: #C0392B !important; }
+.pf-photo { flex-direction: row; gap: 14px; align-items: flex-start; }
+.pf-photo img { width: 84px; height: 84px; object-fit: cover; border-radius: 12px; flex: 0 0 84px; }
+.pf-photo .btn { margin-top: 8px; }
+.pf-crop { width: 200px; height: 200px; object-fit: cover; border-radius: 16px; margin: 12px auto; display: block; }
+.pf-check { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 4px; font-weight: 600; }
+.pf-check input { width: 22px; height: 22px; flex: 0 0 22px; margin-top: 2px; }
