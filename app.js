@@ -151,7 +151,7 @@
         '<button class="tile" data-go="visits">' + ICON.list + 'Booked in the app</button>' +
         '<button class="tile" data-go="account">' + ICON.gear + 'Account</button>' +
       '</div>' +
-      (h.cg_view ? '<button class="card next" data-go="cgsee"><span style="flex:1"><span class="label">Your profile for caregivers</span><br><span class="t">What caregivers see about ' + esc(first(name)) + '</span><br><span class="small muted">See it, or suggest a change</span></span>' + ICON.chev + '</button>' : '') +
+      (h.cg_view ? '<button class="card next" data-go="cgsee"><span style="flex:1"><span class="label">Your profile for caregivers</span><br><span class="t">What caregivers see about ' + esc(first(name)) + '</span><br><span class="small muted">' + (h.family_profile ? (h.cg_view.source === 'family' ? 'You wrote it. See it or change it' : 'Write it so caregivers get to know ' + esc(first(name))) : 'See it, or suggest a change') + '</span></span>' + ICON.chev + '</button>' : '') +
       (h.can_book ? '' : '<div class="note">Your login can see visits. To request visits, ask the office to turn on booking for you.</div>') +
       '</div><div class="foot">' + (phone() ? '<a class="btn outline" href="' + telHref() + '">Call the office</a><p class="center muted small">' + esc(phone()) + ' · a real person answers, weekdays 8 AM to 6 PM</p>' : '<p class="center muted small">Questions? Please call the office.</p>') + '</div>'
   }
@@ -178,7 +178,8 @@
     var v = S.home.cg_view, n = esc(first(S.home.client.name)), good = (v.home || []).slice(), skills = [v.level ? 'Level ' + v.level : ''].concat(v.needs || []).filter(Boolean)
     return '<div class="cgsee">' + '<div class="cgsee-hero">' + (SCENES[v.scene] || SCENES.porch) + '</div>' +
       '<h2>Meet ' + n + '</h2>' +
-      (v.about ? '<p>' + esc(v.about) + '</p>' : '<p class="small muted">We haven\'t finished ' + n + '\'s profile yet, so caregivers see the basics: first name, town, the day and time, and what you ask for.</p>') +
+      (v.about ? '<p>' + esc(v.about) + '</p>' : v.basics ? '<p class="small muted">' + (S.home.family_profile ? 'Nobody has written ' + n + '\'s profile yet' : 'We haven\'t finished ' + n + '\'s profile yet') + ', so caregivers see the basics: first name, town, the day and time, and what you ask for.</p>' : '') +
+      (v.life || []).map(function (x) { return '<div class="cgsee-k">' + esc(x.label) + '</div><p>' + esc(x.text) + '</p>' }).join('') +
       (v.enjoys && v.enjoys.length ? '<div class="cgsee-k">' + n + ' enjoys</div><div class="cgsee-chips">' + v.enjoys.map(function (x) { return '<span>' + esc(x) + '</span>' }).join('') + '</div>' : '') +
       '<div class="cgsee-rows">' +
         '<div class="sum"><span class="muted">Who</span><span class="v">' + n + (v.town ? ', ' + esc(v.town) : '') + '</span></div>' +
@@ -190,10 +191,44 @@
       '</div><p class="small muted">Caregivers don\'t see ' + n + '\'s last name or address here. A caregiver gets the address in AxisCare once they\'re on the visit.</p></div>'
   }
   V.cgsee = function () {
-    var n = first(S.home.client.name)
+    var n = first(S.home.client.name), fp = S.home.family_profile
     return top('What caregivers see', { back: 'home', backLabel: 'Home', sub: 'About ' + n }) + '<div class="body">' + errBox() +
-      '<p class="small muted">When you request a visit, caregivers see this, plus the day, time and what you ask for. Our office writes and approves it.</p>' + cgSee(null) +
+      (S.profileMsg ? '<div class="note" role="status">' + esc(S.profileMsg) + '</div>' : '') +
+      '<p class="small muted">When you request a visit, caregivers see this, plus the day, time and what you ask for. ' + intro() + '</p>' + cgSee(null) +
+      (fp && fp.can_edit ? '<button class="btn" data-go="profile">' + (S.home.cg_view.source === 'family' ? 'Change ' : 'Write ') + esc(n) + '\'s profile</button>' : '') +
+      (fp && !fp.can_edit ? '<p class="small muted">Your login can see visits. Ask the office to turn on booking for you to write the profile.</p>' : '') +
       (S.home.can_suggest ? '<button class="btn outline" data-go="suggest">Suggest a change</button>' : '') + '</div>'
+    function intro() { return !fp ? 'Our office writes and approves it.' : S.home.cg_view.source === 'family' ? 'You wrote it, and you can change it anytime.' + (fp.updated_by ? ' Last changed by ' + esc(fp.updated_by) + '.' : '') : 'Until you write your own, caregivers see what our office wrote.' }
+  }
+  /* THE FAMILY WRITES THE PROFILE (her rule 2026-10-25: "the family who signs up for the app has access to make their profile").
+     It goes to caregivers straight away after the Hub's checks (no address, phone, money or health details); nothing waits for
+     the office. It is the family's own: changes the office makes to its shift profile never change it. */
+  V.profile = function () {
+    var fp = S.home.family_profile, n = first(S.home.client.name), d = S.pf || fp, L = fp.limits || { about: 400, answer: 300, enjoys: 6 }
+    var box = function (k, label, max, rows, ph) { return '<label class="pf-l" for="pf_' + k + '">' + esc(label) + '</label><textarea id="pf_' + k + '" rows="' + rows + '" maxlength="' + max + '"' +
+      (S.pfField === k ? ' aria-invalid="true" class="pf-bad"' : '') + ' placeholder="' + esc(ph) + '">' + esc(d[k] || '') + '</textarea>' }
+    return top((S.home.cg_view.source === 'family' ? 'Change ' : 'Write ') + n + '\'s profile', { back: 'cgsee', backLabel: 'Back', sub: 'For caregivers' }) + '<div class="body">' + errBox() +
+      '<p>Help caregivers get to know ' + esc(n) + '. Write as much or as little as you like.</p>' +
+      box('about', 'A few words about ' + n, L.about, 3, 'For example: ' + n + ' taught third grade for 30 years and still loves a good crossword.') +
+      (fp.questions || []).map(function (q) { return box(q.key, q.label, L.answer, 2, '') }).join('') +
+      '<label class="pf-l" for="pf_enjoys">Things ' + esc(n) + ' enjoys (up to ' + L.enjoys + ', separated by commas)</label><input id="pf_enjoys" maxlength="200"' + (S.pfField === 'enjoys' ? ' aria-invalid="true" class="pf-bad"' : '') + ' value="' + esc((d.enjoys || []).join(', ')) + '" placeholder="Gardening, Sweet tea, Old movies">' +
+      '<p class="small muted">Please leave out health details, addresses, phone numbers and money. Caregivers get care needs from the care plan. It shows to caregivers as soon as you save.</p></div>' +
+      '<div class="foot"><button class="btn" data-act="profile-save"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : 'Save') + '</button></div>'
+  }
+  function readProfile() {
+    var g = function (k) { var el = document.getElementById('pf_' + k); return el ? el.value : '' }
+    return { about: g('about'), work: g('work'), talk: g('talk'), little: g('little'), enjoys: g('enjoys').split(',').map(function (x) { return x.trim() }).filter(Boolean) }
+  }
+  function saveProfile() {
+    S.pf = readProfile(); S.busy = true; S.err = ''; S.pfField = null; render()
+    return call('save_profile', { profile: S.pf }).then(function (r) {
+      S.busy = false
+      if (r.status === 200) {
+        if (r.data.cg_view) { S.home.cg_view = r.data.cg_view; S.home.family_profile = r.data.family_profile }
+        S.pf = null; S.profileMsg = r.data.message || 'Saved.'; S.view = 'cgsee'; return render()
+      }
+      S.err = (r.data && r.data.error) || "It didn't save. Please try again."; S.pfField = r.data && r.data.field; render()
+    })
   }
   V.suggest = function () {
     var n = first(S.home.client.name)
@@ -479,7 +514,7 @@
   app.addEventListener('click', function (e) {
     var el = e.target.closest('button, a'); if (!el) return
     var ds = el.dataset
-    if (ds.go) { if (ds.go === 'suggest') S.suggestDone = null; return go(ds.go) }
+    if (ds.go) { if (ds.go === 'suggest') S.suggestDone = null; if (ds.go === 'profile') { S.pf = null; S.pfField = null } if (ds.go !== 'cgsee') S.profileMsg = ''; return go(ds.go) }
     if (ds.pick) { S.client = ds.pick; S.cgs = null; S.bookings = null; return load('home') }
     if (ds.cg) { S.cg = (S.cgs || []).find(function (x) { return x.axiscare_id === ds.cg }); return go('caregiver') }
     if (ds.date) { S.bk.date = ds.date; fixTimes(); return render() }
@@ -510,6 +545,7 @@
     if (a === 'to-book4') { keepNote(); return go('book4') }
     if (a === 'confirm') return confirm()
     if (a === 'suggest-send') return sendSuggestion()
+    if (a === 'profile-save') return saveProfile()
     if (a === 'suggest-home') { S.suggestDone = null; return go('home') }
     if (a === 'home-reload') { S.bookings = null; return load('home') }
     if (a === 'signout') { S.me = null; S.client = null; S.home = null; S.cgs = null; S.sent = false; if (sb) sb.auth.signOut(); S.view = 'signin'; return render() }

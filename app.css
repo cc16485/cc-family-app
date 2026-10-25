@@ -146,3 +146,6 @@ details.cgsee-d { border: 1px solid var(--border); border-radius: 16px; padding:
 details.cgsee-d summary { font-weight: 700; color: var(--navy); cursor: pointer; min-height: 32px; }
 details.cgsee-d[open] summary { margin-bottom: 10px; }
 #sugg { width: 100%; font: inherit; padding: 12px; border: 2px solid var(--border); border-radius: 12px; box-sizing: border-box; }
+.pf-l { display: block; font-weight: 600; color: var(--navy); margin: 12px 0 4px; }
+.body textarea[id^="pf_"], #pf_enjoys { width: 100%; font: inherit; padding: 12px; border: 2px solid var(--border); border-radius: 12px; box-sizing: border-box; background: var(--card); }
+.pf-bad { border-color: #C0392B !important; }
