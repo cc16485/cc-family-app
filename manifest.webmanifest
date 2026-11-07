@@ -1,9 +1,0 @@
-{
-  "name": "Caring Companions Booking App",
-  "short_name": "Booking App",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#faf9f6",
-  "theme_color": "#14606F",
-  "icons": [{ "src": "assets/favicon.png", "sizes": "180x180", "type": "image/png" }]
-}
